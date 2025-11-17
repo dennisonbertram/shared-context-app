@@ -1,15 +1,41 @@
 # Global Context Network MVP - Implementation Readiness Report
 
-**Date**: 2025-01-16
-**Status**: READY FOR IMPLEMENTATION (with clarifications)
-**Reviewer**: Claude (Sonnet 4.5) + Gemini 2.5 Flash
-**Documentation Version**: 48 documents (post-remediation)
+**Date**: 2025-01-17 (Updated)
+**Status**: ⚠️ **IMPLEMENTATION BLOCKED** - Critical hooks alignment issues identified
+**Reviewer**: Claude (Sonnet 4.5) + Gemini 2.5 Flash + Hooks Alignment Audit
+**Documentation Version**: 48 documents (post-remediation + hooks fixes)
+
+---
+
+## 🚨 CRITICAL UPDATE (2025-01-17)
+
+A comprehensive audit of Claude Code hooks integration revealed **6 CRITICAL architectural misalignments** that would prevent the hook system from functioning. These issues have been identified and remediated.
+
+**Status**: Documentation now updated with correct Claude Code hooks implementation. See [Hooks Alignment Remediation Report](reviews/hooks-alignment-remediation-2025-01-17.md) for complete details.
+
+### Critical Issues Fixed
+
+1. ✅ **Hook Configuration Format** - Changed from fictional `.claude/hooks.json` to official `.claude/settings.json` with matcher/hooks array structure
+2. ✅ **Hook Input Method** - Fixed from argv to stdin JSON reading
+3. ✅ **Missing Hook Events** - Documented all 10 events (PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, Notification, PreCompact, SessionStart, SessionEnd, PermissionRequest)
+4. ✅ **Hook Input Schema** - Updated to match official Claude Code schemas with session_id, transcript_path, cwd, permission_mode, hook_event_name
+5. ✅ **Environment Variables** - Fixed to use CLAUDE_PROJECT_DIR, CLAUDE_ENV_FILE, CLAUDE_CODE_REMOTE
+6. ✅ **Hook Output Format** - Documented JSON output schemas and exit code semantics
+
+### Updated Documents
+
+- ✅ `docs/reviews/hooks-alignment-remediation-2025-01-17.md` (NEW) - Complete remediation report
+- ✅ `docs/decisions/decision-use-claude-hooks-2025-01-16.md` - Fixed configuration and schemas
+- ✅ `docs/architecture/architecture-hooks-event-capture-2025-01-16.md` - Fixed implementation patterns
+- ✅ `docs/reference/reference-hook-configuration-2025-01-16.md` - Completely rewritten for accuracy
+
+**Next Step**: Review the remediation report before proceeding with implementation.
 
 ---
 
 ## Executive Summary
 
-The Global Context Network MVP documentation is **READY FOR IMPLEMENTATION** following comprehensive remediation of all critical blockers identified in previous reviews. 48 complete documents provide detailed architecture, decisions, plans, guides, and references for building a privacy-first learning capture and sharing system.
+The Global Context Network MVP documentation has undergone comprehensive remediation of all critical blockers identified in previous reviews. Following a detailed audit on 2025-01-17, critical Claude Code hooks integration issues were identified and fixed. 48+ documents now provide accurate architecture, decisions, plans, guides, and references for building a privacy-first learning capture and sharing system.
 
 **Key Achievement**: All 7 critical blockers from initial GPT-5/Gemini reviews have been successfully resolved with comprehensive updates across 14 documents.
 

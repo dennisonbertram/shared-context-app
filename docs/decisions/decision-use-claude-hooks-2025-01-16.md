@@ -162,22 +162,67 @@ Use Claude Code's native hook system (UserPromptSubmit and Stop hooks) for event
 
 ### Hook Configuration
 
+**File**: `.claude/settings.json` (or `.claude/settings.local.json` for local-only)
+
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": {
-      "command": "node",
-      "args": [".claude/hooks/capture-prompt.js"],
-      "timeout": 100
-    },
-    "Stop": {
-      "command": "node",
-      "args": [".claude/hooks/capture-response.js"],
-      "timeout": 100
-    }
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/capture-prompt.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/capture-response.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ]
   }
 }
 ```
+
+**Note**: Configuration uses `.claude/settings.json`, NOT a separate `hooks.json` file. The `timeout` value (100ms) is the performance budget for non-blocking execution. The actual hook timeout is 60s by default to prevent hung processes.
+
+### Hook Input Schema
+
+Claude Code hooks receive JSON data via **stdin** (NOT process.argv):
+
+**UserPromptSubmit Hook Input**:
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/.../.claude/projects/.../00893aaf.jsonl",
+  "cwd": "/Users/...",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Write a function to calculate factorial"
+}
+```
+
+**Stop Hook Input**:
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "~/.claude/projects/.../00893aaf.jsonl",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false
+}
+```
+
+**CRITICAL**: The Stop hook does NOT receive the agent response directly. The hook must read and parse the `transcript_path` file to extract the response.
 
 ### Event Schema
 
@@ -194,19 +239,20 @@ interface CapturedEvent {
   // UserPromptSubmit fields
   prompt?: string;
 
-  // Stop fields
+  // Stop fields (extracted from transcript)
   response?: string;
   toolCalls?: ToolCall[];
 
   // Metadata
   redactionStatus: "pending" | "sanitized" | "failed";
   hookVersion: string;
+  transcriptPath: string;  // Path to conversation transcript
 }
 ```
 
 ### Consent and Scope
 
-- **Explicit opt-in** - Per-project .claude/hooks.json must be created
+- **Explicit opt-in** - Per-project `.claude/settings.json` or `.claude/settings.local.json` must be created with hook configuration
 - **Guard rails** - Nothing persisted until sanitization passes
 - **User control** - Users can disable hooks at any time
 - **Transparency** - Clear documentation of what's captured

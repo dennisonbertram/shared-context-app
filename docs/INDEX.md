@@ -1,6 +1,12 @@
 # Documentation Index
 
-> Last updated: 2025-01-16
+> Last updated: 2025-01-17
+
+## 🚨 Critical Update (2025-01-17)
+
+**IMPORTANT**: A comprehensive hooks alignment audit identified 6 critical architectural issues with the Claude Code hooks integration. All issues have been remediated. See [Hooks Alignment Remediation Report](./reviews/hooks-alignment-remediation-2025-01-17.md) for details.
+
+**Status**: Documentation updated with correct Claude Code hooks implementation. Review remediation report before proceeding with implementation.
 
 ## Overview
 

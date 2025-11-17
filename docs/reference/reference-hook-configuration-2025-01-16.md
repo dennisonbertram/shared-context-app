@@ -13,65 +13,71 @@ tags: [reference, hooks, configuration, performance, build]
 
 ## Overview
 
-This document provides the complete reference for configuring Claude Code hooks in the Global Context Network. It covers the canonical `.claude/hooks.json` format, TypeScript compilation requirements, performance budgets, environment variables, and cross-platform considerations.
+This document provides the complete reference for configuring Claude Code hooks in the Global Context Network. It covers the official `.claude/settings.json` format, TypeScript compilation requirements, performance budgets, environment variables, and cross-platform considerations.
 
 **Critical Requirements**:
-- Configuration path: `.claude/hooks.json` (canonical)
+- Configuration location: `.claude/settings.json` (official location, NOT `hooks.json`)
 - Hook scripts: Compiled `.js` files (NOT `.ts`, NO `ts-node`)
-- Input method: `stdin` JSON (canonical)
-- Performance: <100ms p95 latency
+- Input method: `stdin` JSON (official specification)
+- Performance: <100ms p95 latency (non-blocking requirement)
+- Timeout: 60s default (fail-safe for hung hooks)
 
 ## Table of Contents
 
 1. [Configuration File Format](#configuration-file-format)
-2. [Hook Types](#hook-types)
-3. [Build Process](#build-process)
-4. [Performance Budgets](#performance-budgets)
-5. [Environment Variables](#environment-variables)
-6. [Error Handling Configuration](#error-handling-configuration)
-7. [Cross-Platform Considerations](#cross-platform-considerations)
-8. [Complete Examples](#complete-examples)
-9. [Troubleshooting](#troubleshooting)
+2. [Hook Events](#hook-events)
+3. [Hook Input Schema](#hook-input-schema)
+4. [Hook Output Schema](#hook-output-schema)
+5. [Build Process](#build-process)
+6. [Performance Budgets](#performance-budgets)
+7. [Environment Variables](#environment-variables)
+8. [Error Handling Configuration](#error-handling-configuration)
+9. [Cross-Platform Considerations](#cross-platform-considerations)
+10. [Complete Examples](#complete-examples)
+11. [Troubleshooting](#troubleshooting)
 
 ## Configuration File Format
 
 ### Location
 
-**Canonical path**: `.claude/hooks.json`
+**Official path**: `.claude/settings.json`
 
 ```
 project-root/
 ├── .claude/
-│   ├── hooks.json          # ← Configuration file (CANONICAL)
+│   ├── settings.json       # ← Configuration file (OFFICIAL)
 │   └── hooks/
 │       ├── src/            # TypeScript source
 │       │   ├── userPromptSubmit.ts
-│       │   └── stop.ts
-│       ├── dist/           # Compiled JavaScript (referenced by hooks.json)
+│       │   ├── stop.ts
+│       │   └── sessionStart.ts
+│       ├── dist/           # Compiled JavaScript (referenced by settings.json)
 │       │   ├── userPromptSubmit.js
-│       │   └── stop.js
+│       │   ├── stop.js
+│       │   └── sessionStart.js
 │       ├── tsconfig.json
 │       └── package.json
 ```
 
 **NOT**:
+- ❌ `.claude/hooks.json` (incorrect - not used by Claude Code)
 - ❌ `.claude/hooks/hooks.json` (incorrect path)
 - ❌ `.claude/config.json` (wrong filename)
-- ❌ `hooks.json` (missing `.claude/` directory)
 
 ### Schema
 
 ```typescript
-interface HooksConfiguration {
-  hooks: {
-    [hookName: string]: string;  // Path to compiled .js file
-  };
-  config?: {
-    eventQueuePath?: string;
-    maxBufferSize?: number;
-    fallbackToSampling?: boolean;
-    samplingRate?: number;
-    performanceBudgetMs?: number;
+interface ClaudeSettings {
+  hooks?: {
+    [hookEventName: string]: Array<{
+      matcher?: string;  // Optional: filter by tool name pattern
+      hooks: Array<{
+        type: "command" | "prompt";
+        command?: string;  // For type: "command"
+        prompt?: string;   // For type: "prompt"
+        timeout?: number;  // Optional timeout in seconds (default: 60)
+      }>;
+    }>;
   };
 }
 ```
@@ -81,119 +87,565 @@ interface HooksConfiguration {
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
-    "Stop": ".claude/hooks/dist/stop.js"
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/userPromptSubmit.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/stop.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-### Full Configuration
+### Full Configuration (All Events)
 
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
-    "Stop": ".claude/hooks/dist/stop.js"
-  },
-  "config": {
-    "eventQueuePath": "${PROJECT_ROOT}/.data/context.db",
-    "maxBufferSize": 1000,
-    "fallbackToSampling": true,
-    "samplingRate": 0.1,
-    "performanceBudgetMs": 100
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/userPromptSubmit.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/stop.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/preToolUse.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/postToolUse.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/sessionStart.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/sessionEnd.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/preCompact.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-### Configuration Options
+### Configuration Fields
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `hooks` | object | `{}` | Map of hook names to script paths |
-| `config.eventQueuePath` | string | `"${PROJECT_ROOT}/.data/context.db"` | SQLite database path |
-| `config.maxBufferSize` | number | `1000` | Max events in queue before sampling |
-| `config.fallbackToSampling` | boolean | `true` | Enable sampling under load |
-| `config.samplingRate` | number | `0.1` | Sample rate when buffer full (0.1 = 10%) |
-| `config.performanceBudgetMs` | number | `100` | p95 latency budget in milliseconds |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Hook type: "command" or "prompt" |
+| `command` | string | Yes (for type: command) | Full command with args (use $CLAUDE_PROJECT_DIR) |
+| `prompt` | string | Yes (for type: prompt) | LLM prompt for intelligent decision |
+| `timeout` | number | No | Timeout in seconds (default: 60s) |
+| `matcher` | string | No | Regex pattern for tool name filtering |
 
 ### Path Variables
 
-Supported environment variable expansions:
-
 | Variable | Expands To | Example |
 |----------|------------|---------|
-| `${PROJECT_ROOT}` | Absolute project directory | `/Users/alice/my-project` |
-| `${HOME}` | User home directory | `/Users/alice` |
-| `${TMPDIR}` | System temp directory | `/tmp` |
+| `$CLAUDE_PROJECT_DIR` | Absolute project directory | `/Users/alice/my-project` |
 
-## Hook Types
+**CRITICAL**: Use `\"$CLAUDE_PROJECT_DIR\"` with escaped quotes in JSON for paths with spaces.
 
-### UserPromptSubmit
+## Hook Events
 
-**Fires**: Before Claude processes user input
+Claude Code provides 10 hook events:
+
+### 1. PreToolUse
+
+**Fires**: Before tool execution (can block or modify)
+
+**Purpose**: Validate tool calls, modify inputs, enforce policies
+
+**Capabilities**:
+- Block tool execution
+- Modify tool input
+- Request permission
+
+**Use Cases**:
+- Prevent destructive operations
+- Validate file paths
+- Enforce security policies
+
+### 2. PostToolUse
+
+**Fires**: After tool execution
+
+**Purpose**: Validate outputs, trigger formatters, capture results
+
+**Use Cases**:
+- Run code formatters after Write/Edit
+- Validate build success
+- Capture tool outputs
+
+### 3. UserPromptSubmit
+
+**Fires**: When user submits prompt
 
 **Purpose**: Capture user prompts for context building
 
-**Event Payload** (via stdin):
-```json
-{
-  "prompt": "User's message text",
-  "conversation_id": "uuid-v4-string",
-  "session_id": "session-uuid",
-  "project_id": "project-identifier",
-  "timestamp": 1705401234567,
-  "attachments": [
-    {
-      "name": "file.txt",
-      "path": "/absolute/path/to/file.txt",
-      "mime_type": "text/plain",
-      "size": 1024
-    }
-  ]
-}
-```
+**Use Cases**:
+- Event capture for context network
+- Analytics
+- Prompt preprocessing
 
-**Configuration Example**:
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js"
-  }
-}
-```
+### 4. Stop
 
-### Stop
-
-**Fires**: After Claude completes response generation
+**Fires**: When agent finishes response generation
 
 **Purpose**: Capture agent responses and tool usage
 
-**Event Payload** (via stdin):
-```json
-{
-  "response": "Assistant's response text",
-  "conversation_id": "uuid-v4-string",
-  "session_id": "session-uuid",
-  "project_id": "project-identifier",
-  "timestamp": 1705401234567,
-  "tool_calls": [
-    {
-      "tool": "bash",
-      "input": "ls -la",
-      "output": "total 64\ndrwxr-xr-x ..."
-    }
-  ]
+**Use Cases**:
+- Event capture for context network
+- Response analysis
+- Session logging
+
+### 5. SubagentStop
+
+**Fires**: When subagent finishes
+
+**Purpose**: Capture subagent completions
+
+**Use Cases**:
+- Track subagent task completion
+- Capture subagent outputs
+
+### 6. Notification
+
+**Fires**: When notifications sent
+
+**Purpose**: Capture notification events
+
+**Use Cases**:
+- Log notifications
+- Track user alerts
+
+### 7. PreCompact
+
+**Fires**: Before transcript compaction
+
+**Purpose**: Flush pending events before compaction
+
+**Use Cases**:
+- Flush event queue
+- Archive conversation state
+
+### 8. SessionStart
+
+**Fires**: Session initialization
+
+**Purpose**: Initialize resources, load context
+
+**Use Cases**:
+- Initialize event queue
+- Set up session state
+- Load user preferences
+
+**Special Feature**: Can persist environment variables via `CLAUDE_ENV_FILE`
+
+### 9. SessionEnd
+
+**Fires**: Session termination
+
+**Purpose**: Cleanup, final flush
+
+**Use Cases**:
+- Flush event queue
+- Clean up resources
+- Save session state
+
+### 10. PermissionRequest
+
+**Fires**: Permission dialogs
+
+**Purpose**: Auto-approve/deny permission requests
+
+**Use Cases**:
+- Auto-approve safe operations
+- Enforce permission policies
+
+## Hook Input Schema
+
+All hooks receive JSON via stdin with the following base schema:
+
+### Base Schema (All Events)
+
+```typescript
+interface BaseHookInput {
+  session_id: string;              // Current session identifier
+  transcript_path: string;         // Absolute path to .jsonl transcript
+  cwd: string;                     // Current working directory
+  permission_mode: string;         // Permission mode: "default", "auto", etc.
+  hook_event_name: string;         // Event name: "UserPromptSubmit", "Stop", etc.
 }
 ```
 
-**Configuration Example**:
+### UserPromptSubmit Event
+
 ```json
 {
-  "hooks": {
-    "Stop": ".claude/hooks/dist/stop.js"
+  "session_id": "abc123",
+  "transcript_path": "/Users/alice/.claude/projects/my-project/00893aaf.jsonl",
+  "cwd": "/Users/alice/my-project",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Write a function to calculate factorial"
+}
+```
+
+**TypeScript Interface**:
+```typescript
+interface UserPromptSubmitInput extends BaseHookInput {
+  hook_event_name: "UserPromptSubmit";
+  prompt: string;  // User's message text
+}
+```
+
+### Stop Event
+
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/alice/.claude/projects/my-project/00893aaf.jsonl",
+  "cwd": "/Users/alice/my-project",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "stop_hook_active": true
+}
+```
+
+**TypeScript Interface**:
+```typescript
+interface StopInput extends BaseHookInput {
+  hook_event_name: "Stop";
+  stop_hook_active: boolean;
+}
+```
+
+**CRITICAL**: Stop hook does NOT receive the agent response directly. You must read the `transcript_path` file to extract the response.
+
+### PreToolUse Event
+
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/alice/.claude/projects/my-project/00893aaf.jsonl",
+  "cwd": "/Users/alice/my-project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/path/to/file.ts",
+    "content": "const x = 1;"
   }
 }
 ```
+
+**TypeScript Interface**:
+```typescript
+interface PreToolUseInput extends BaseHookInput {
+  hook_event_name: "PreToolUse";
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+}
+```
+
+### PostToolUse Event
+
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/alice/.claude/projects/my-project/00893aaf.jsonl",
+  "cwd": "/Users/alice/my-project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/path/to/file.ts",
+    "content": "const x = 1;"
+  },
+  "tool_output": {
+    "success": true
+  }
+}
+```
+
+**TypeScript Interface**:
+```typescript
+interface PostToolUseInput extends BaseHookInput {
+  hook_event_name: "PostToolUse";
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  tool_output: Record<string, unknown>;
+}
+```
+
+### SessionStart Event
+
+```json
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/alice/.claude/projects/my-project/00893aaf.jsonl",
+  "cwd": "/Users/alice/my-project",
+  "permission_mode": "default",
+  "hook_event_name": "SessionStart"
+}
+```
+
+**TypeScript Interface**:
+```typescript
+interface SessionStartInput extends BaseHookInput {
+  hook_event_name: "SessionStart";
+}
+```
+
+### Reading Hook Input
+
+**Correct Pattern** (stdin):
+
+```typescript
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+async function main() {
+  const input = await readStdin();
+  const hookData = JSON.parse(input);
+
+  // Validate event type
+  if (hookData.hook_event_name !== 'UserPromptSubmit') {
+    console.error('Unexpected event:', hookData.hook_event_name);
+    process.exit(1);
+  }
+
+  // Process event
+  const prompt = hookData.prompt;
+  // ...
+}
+```
+
+**WRONG Patterns**:
+```typescript
+// ❌ WRONG: Reading from argv (not used by Claude Code)
+const hookData = JSON.parse(process.argv[2]);
+
+// ❌ WRONG: Reading from environment variables
+const hookData = JSON.parse(process.env.HOOK_DATA);
+
+// ❌ WRONG: Synchronous stdin read in Node.js 20+ (deprecated)
+const input = fs.readFileSync(0, 'utf-8');
+```
+
+### Reading Transcript for Stop Hook
+
+The Stop hook receives `transcript_path` but NOT the response directly. You must read the transcript file:
+
+```typescript
+import { readFileSync } from 'node:fs';
+
+interface TranscriptMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp?: string;
+}
+
+function parseTranscript(transcriptPath: string): TranscriptMessage[] {
+  const content = readFileSync(transcriptPath, 'utf8');
+  return content
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => JSON.parse(line));
+}
+
+async function main() {
+  const input = await readStdin();
+  const hookData = JSON.parse(input);
+
+  // Read transcript to get response
+  const transcript = parseTranscript(hookData.transcript_path);
+  const lastMessage = transcript[transcript.length - 1];
+
+  if (lastMessage.role === 'assistant') {
+    const response = lastMessage.content;
+    // Process response...
+  }
+}
+```
+
+## Hook Output Schema
+
+Hooks can output JSON to stdout to control Claude Code behavior.
+
+### Base Output Schema
+
+```typescript
+interface HookOutput {
+  continue?: boolean;           // Whether Claude should continue (default: true)
+  stopReason?: string;          // Message shown when continue is false
+  suppressOutput?: boolean;     // Hide stdout from transcript (default: false)
+  systemMessage?: string;       // Warning message to user
+  hookSpecificOutput?: Record<string, unknown>;  // Event-specific output
+}
+```
+
+### UserPromptSubmit Output
+
+```json
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": "User has asked about TypeScript 3 times today"
+  }
+}
+```
+
+### PreToolUse Output (Permission Control)
+
+```json
+{
+  "continue": true,
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "File path is within project directory",
+    "updatedInput": {
+      "file_path": "/normalized/path/to/file.ts",
+      "content": "const x = 1;"
+    }
+  }
+}
+```
+
+**Permission Decisions**:
+- `"allow"`: Allow tool execution with optional modified input
+- `"deny"`: Block tool execution
+- `"ask"`: Prompt user for permission
+
+### PostToolUse Output (Block Continuation)
+
+```json
+{
+  "continue": false,
+  "stopReason": "Build failed after file write",
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "decision": "block"
+  }
+}
+```
+
+### Stop Output (Block Completion)
+
+```json
+{
+  "continue": false,
+  "stopReason": "Response contains sensitive data",
+  "hookSpecificOutput": {
+    "hookEventName": "Stop",
+    "decision": "block"
+  }
+}
+```
+
+### Exit Codes
+
+| Exit Code | Meaning | Behavior |
+|-----------|---------|----------|
+| `0` | Success | Continue (unless JSON output says otherwise) |
+| `1` | Error | Log error, continue anyway (fail silently) |
+| `2` | Block | Block the action (only for blocking-capable hooks) |
+
+**Blocking-Capable Hooks**:
+- PreToolUse
+- Stop
+- SubagentStop
+- UserPromptSubmit
+
+**Non-Blocking Hooks** (exit code 2 ignored):
+- PostToolUse
+- Notification
+- PreCompact
+- SessionStart
+- SessionEnd
 
 ## Build Process
 
@@ -206,24 +658,6 @@ Supported environment variable expansions:
 2. **Reliability**: No runtime TypeScript compilation errors
 3. **Simplicity**: Single Node.js process, no transpiler overhead
 4. **Production-ready**: Same execution model as deployed code
-
-**❌ Wrong**:
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": ".claude/hooks/src/userPromptSubmit.ts"  // ❌ ts-node too slow
-  }
-}
-```
-
-**✅ Correct**:
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js"  // ✅ Compiled JS
-  }
-}
-```
 
 ### TypeScript Configuration
 
@@ -304,6 +738,7 @@ ls -l dist/
 # Expected output:
 # userPromptSubmit.js
 # stop.js
+# sessionStart.js
 
 # Test hooks (uses compiled .js)
 npm test
@@ -320,43 +755,22 @@ npm run build:watch
 npm test
 ```
 
-### Pre-Commit Hook (Optional)
-
-Ensure hooks are always compiled before commit:
-
-**File**: `.git/hooks/pre-commit`
-
-```bash
-#!/bin/bash
-
-# Build hooks before commit
-cd .claude/hooks
-npm run build
-
-if [ $? -ne 0 ]; then
-  echo "Hook compilation failed. Fix errors before committing."
-  exit 1
-fi
-
-# Add compiled files
-git add dist/
-```
-
-Make executable:
-```bash
-chmod +x .git/hooks/pre-commit
-```
-
 ## Performance Budgets
 
 ### Latency Requirements
 
-| Metric | Budget | Measurement Point |
-|--------|--------|-------------------|
-| Hook execution (p95) | <100ms | Start to process exit |
+| Metric | Budget | Description |
+|--------|--------|-------------|
+| Hook execution (p95) | <100ms | Performance budget (non-blocking requirement) |
+| Hook timeout | 60s (default) | Fail-safe for hung hooks |
 | Fast sanitization (p95) | <50ms | Regex-based redaction only |
 | Database write (p95) | <20ms | SQLite WAL insert |
 | Total overhead (p95) | <100ms | User perceivable delay |
+
+**Important Distinction**:
+- **100ms**: Performance budget (hooks should complete in <100ms)
+- **60s**: Timeout (hooks won't be killed until 60s)
+- Hooks should aim for <100ms but won't fail until 60s timeout
 
 ### Performance Breakdown
 
@@ -388,17 +802,6 @@ if (duration > 100) {
 }
 ```
 
-**Log Analysis**:
-
-```bash
-# Check p95 latency
-grep "Duration:" logs/hooks.log | \
-  awk -F'Duration: ' '{print $2}' | \
-  sed 's/ms//' | \
-  sort -n | \
-  awk 'BEGIN {c=0} {a[c++]=$1} END {print "p95:", a[int(c*0.95)]}'
-```
-
 ### Optimization Strategies
 
 If hooks exceed 100ms:
@@ -420,47 +823,80 @@ If hooks exceed 100ms:
    - Use WAL mode (not DELETE journal)
    - Minimize index overhead
 
-4. **Enable sampling** (last resort):
-   ```json
-   {
-     "config": {
-       "fallbackToSampling": true,
-       "samplingRate": 0.1
-     }
-   }
+4. **Fire-and-forget pattern**:
+   ```typescript
+   // Hook just queues event and exits immediately
+   queueEvent(event).catch(err => console.error(err));
+   process.exit(0);
    ```
 
 ## Environment Variables
 
-### Standard Variables
+### Official Claude Code Environment Variables
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `DB_PATH` | Database location | `/path/to/context.db` |
-| `LOG_LEVEL` | Logging verbosity | `error`, `warn`, `info`, `debug` |
-| `HOOK_TIMEOUT_MS` | Override timeout | `100` |
-| `NODE_ENV` | Environment | `development`, `production` |
+| Variable | Availability | Description |
+|----------|--------------|-------------|
+| `CLAUDE_PROJECT_DIR` | All hooks | Project root directory (absolute path) |
+| `CLAUDE_ENV_FILE` | SessionStart only | File path for persisting env vars |
+| `CLAUDE_CODE_REMOTE` | All hooks | "true" if remote/web, unset for local CLI |
+| `CLAUDE_PLUGIN_ROOT` | Plugin hooks only | Plugin directory |
 
-### Configuration in Hook
+### Using CLAUDE_PROJECT_DIR
 
-**File**: `.claude/hooks/src/userPromptSubmit.ts`
+**In Hook Command** (.claude/settings.json):
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dist/userPromptSubmit.js"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
+**In Hook Code**:
 ```typescript
 import { join } from 'node:path';
 
-// Environment configuration
-const CONFIG = {
-  dbPath: process.env.DB_PATH || join(__dirname, '../../.data/context.db'),
-  logLevel: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'debug',
-  timeoutMs: parseInt(process.env.HOOK_TIMEOUT_MS || '100', 10),
-  isDevelopment: process.env.NODE_ENV !== 'production'
-};
-
-// Use configuration
-const db = new Database(CONFIG.dbPath);
+// Access project directory
+const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const dbPath = join(projectDir, '.data', 'context.db');
 ```
 
-### Setting Environment Variables
+### SessionStart Environment Persistence
+
+SessionStart hooks can persist environment variables using `CLAUDE_ENV_FILE`:
+
+```typescript
+// sessionStart.ts
+import { appendFileSync } from 'node:fs';
+
+async function main() {
+  const input = await readStdin();
+  const hookData = JSON.parse(input);
+
+  // Persist environment variables for entire session
+  if (process.env.CLAUDE_ENV_FILE) {
+    appendFileSync(
+      process.env.CLAUDE_ENV_FILE,
+      `export SESSION_ID="${hookData.session_id}"\n`
+    );
+    appendFileSync(
+      process.env.CLAUDE_ENV_FILE,
+      `export DB_PATH="${projectDir}/.data/context.db"\n`
+    );
+  }
+}
+```
+
+### Custom Environment Variables
 
 **Per-session** (testing):
 ```bash
@@ -477,18 +913,11 @@ export LOG_LEVEL="info"
 export NODE_ENV="production"
 ```
 
-**In Claude Code** (if supported):
-```bash
-# .claude/env
-DB_PATH=.data/context.db
-LOG_LEVEL=info
-```
-
 ## Error Handling Configuration
 
 ### Failure Modes
 
-Hooks MUST fail silently and never block user interaction:
+Hooks MUST fail silently and never block user interaction (except for blocking-capable hooks):
 
 ```typescript
 try {
@@ -496,15 +925,12 @@ try {
   const result = await captureEvent(event);
 } catch (error) {
   // Log error but DON'T throw
-  logger.error('Hook failed', { error, event: sanitizeLogData(event) });
+  logger.error('Hook failed', { error });
 
-  // Optional: Emit metric
-  metrics?.increment('hook.error');
-
-  // NEVER throw to caller
+  // NEVER throw to caller (for non-blocking hooks)
 }
 
-// Always exit successfully
+// Always exit successfully (unless intentionally blocking)
 process.exit(0);
 ```
 
@@ -534,37 +960,6 @@ function logError(error: Error, context: Record<string, unknown>): void {
     // If logging fails, fail completely silently
   }
 }
-```
-
-### Retry Configuration
-
-**NOT in hooks** (too slow). Use async workers instead:
-
-```json
-{
-  "config": {
-    "asyncWorker": {
-      "maxRetries": 3,
-      "retryDelayMs": 1000,
-      "backoffMultiplier": 2
-    }
-  }
-}
-```
-
-### Dead Letter Queue
-
-Failed events move to dead letter queue after max retries:
-
-```sql
-CREATE TABLE IF NOT EXISTS dead_letter_queue (
-  id TEXT PRIMARY KEY,
-  original_event TEXT NOT NULL,
-  error TEXT NOT NULL,
-  attempts INTEGER NOT NULL,
-  failed_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
 ```
 
 ## Cross-Platform Considerations
@@ -601,15 +996,6 @@ const dbPath = `${__dirname}/../../.data/context.db`;
 
 **Claude Code execution**: Handles platform differences automatically
 
-### File Permissions
-
-**Unix/macOS**:
-```bash
-chmod +x .claude/hooks/dist/*.js
-```
-
-**Windows**: No execution bit; Node.js invoked directly
-
 ### Line Endings
 
 **Configure Git**:
@@ -618,15 +1004,6 @@ chmod +x .claude/hooks/dist/*.js
 *.js text eol=lf
 *.ts text eol=lf
 *.json text eol=lf
-```
-
-**Configure TypeScript**:
-```json
-{
-  "compilerOptions": {
-    "newLine": "lf"
-  }
-}
 ```
 
 ### SQLite Compatibility
@@ -643,20 +1020,66 @@ npm rebuild better-sqlite3
 
 ## Complete Examples
 
-### Example 1: Minimal Configuration
-
-**File**: `.claude/hooks.json`
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
-    "Stop": ".claude/hooks/dist/stop.js"
-  }
-}
-```
+### Example 1: UserPromptSubmit Hook
 
 **File**: `.claude/hooks/src/userPromptSubmit.ts`
+
+```typescript
+#!/usr/bin/env node
+
+import { performance } from 'node:perf_hooks';
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+async function main() {
+  const startTime = performance.now();
+
+  try {
+    // Read hook input from stdin
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
+
+    // Validate event type
+    if (hookData.hook_event_name !== 'UserPromptSubmit') {
+      console.error('Unexpected hook event:', hookData.hook_event_name);
+      process.exit(1);
+    }
+
+    // Extract prompt
+    const prompt = hookData.prompt;
+    const sessionId = hookData.session_id;
+
+    // Fire-and-forget event capture
+    console.log(`[UserPromptSubmit] Captured prompt: ${prompt.substring(0, 50)}...`);
+
+    const duration = performance.now() - startTime;
+    if (duration > 100) {
+      console.warn(`⚠ Hook exceeded budget: ${duration}ms`);
+    }
+
+    // Exit successfully (never block user)
+    process.exit(0);
+
+  } catch (error) {
+    console.error('[Hook Critical Error]', error);
+    process.exit(1);
+  }
+}
+
+main();
+```
+
+### Example 2: Stop Hook (with Transcript Reading)
+
+**File**: `.claude/hooks/src/stop.ts`
 
 ```typescript
 #!/usr/bin/env node
@@ -664,163 +1087,198 @@ npm rebuild better-sqlite3
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
-const startTime = performance.now();
-
-try {
-  // Read stdin
-  const input = readFileSync(0, 'utf-8');
-  const event = JSON.parse(input);
-
-  // Process event (fast)
-  console.log(`Captured: ${event.prompt.substring(0, 50)}...`);
-
-  const duration = performance.now() - startTime;
-  if (duration > 100) {
-    console.warn(`Slow hook: ${duration}ms`);
-  }
-} catch (error) {
-  console.error('Hook error:', error);
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
 }
 
-process.exit(0);
-```
-
-**Build**:
-```bash
-cd .claude/hooks
-npm run build
-```
-
-### Example 2: Production Configuration
-
-**File**: `.claude/hooks.json`
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
-    "Stop": ".claude/hooks/dist/stop.js"
-  },
-  "config": {
-    "eventQueuePath": "${PROJECT_ROOT}/.data/context.db",
-    "maxBufferSize": 1000,
-    "fallbackToSampling": true,
-    "samplingRate": 0.1,
-    "performanceBudgetMs": 100
-  }
-}
-```
-
-**File**: `.claude/hooks/src/userPromptSubmit.ts`
-
-```typescript
-#!/usr/bin/env node
-
-import { readFileSync, appendFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { performance } from 'node:perf_hooks';
-import Database from 'better-sqlite3';
-import { ulid } from 'ulid';
-
-// Configuration
-const DB_PATH = process.env.DB_PATH || join(__dirname, '../../.data/context.db');
-const LOG_PATH = join(__dirname, '../../logs/hooks.log');
-
-interface HookEvent {
-  prompt: string;
-  conversation_id?: string;
-  session_id: string;
-  timestamp: number;
+interface TranscriptMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
-function log(message: string): void {
-  const timestamp = new Date().toISOString();
-  try {
-    appendFileSync(LOG_PATH, `[${timestamp}] UserPromptSubmit: ${message}\n`);
-  } catch {
-    // Fail silently
-  }
+function parseTranscript(transcriptPath: string): TranscriptMessage[] {
+  const content = readFileSync(transcriptPath, 'utf8');
+  return content
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => JSON.parse(line));
 }
 
-function sanitize(text: string): string {
-  // Fast regex-based sanitization
-  return text
-    .replace(/\bsk-[a-zA-Z0-9]{48}\b/g, '[REDACTED_API_KEY]')
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[REDACTED_EMAIL]')
-    .replace(/\/Users\/[^\/\s]+\/[^\s]*/g, '[REDACTED_PATH]');
-}
-
-function main(): void {
+async function main() {
   const startTime = performance.now();
 
   try {
-    // Read stdin
-    const input = readFileSync(0, 'utf-8');
-    const event: HookEvent = JSON.parse(input);
+    // Read hook input from stdin
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
 
-    // Sanitize BEFORE storage
-    const sanitizedContent = sanitize(event.prompt);
+    // Validate event type
+    if (hookData.hook_event_name !== 'Stop') {
+      console.error('Unexpected hook event:', hookData.hook_event_name);
+      process.exit(1);
+    }
 
-    // Queue event
-    const db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    // CRITICAL: Read transcript to get response
+    const transcript = parseTranscript(hookData.transcript_path);
+    const lastMessage = transcript[transcript.length - 1];
 
-    const conversationId = event.conversation_id || ulid();
-    const messageId = ulid();
-
-    db.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(messageId, conversationId, 'user', sanitizedContent, new Date().toISOString());
-
-    db.close();
+    if (lastMessage && lastMessage.role === 'assistant') {
+      const response = lastMessage.content;
+      console.log(`[Stop] Captured response: ${response.substring(0, 50)}...`);
+    }
 
     const duration = performance.now() - startTime;
-    log(`Captured user prompt. Duration: ${duration}ms`);
-
     if (duration > 100) {
-      log(`⚠ WARNING: Hook exceeded budget: ${duration}ms`);
+      console.warn(`⚠ Hook exceeded budget: ${duration}ms`);
     }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    log(`Error: ${errorMsg}`);
-  }
 
-  process.exit(0);
+    // Exit successfully
+    process.exit(0);
+
+  } catch (error) {
+    console.error('[Hook Critical Error]', error);
+    process.exit(1);
+  }
 }
 
 main();
 ```
 
-**File**: `.claude/hooks/tsconfig.json`
+### Example 3: PreToolUse Hook (Permission Control)
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": false,
-    "sourceMap": false,
-    "removeComments": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+**File**: `.claude/hooks/src/preToolUse.ts`
+
+```typescript
+#!/usr/bin/env node
+
+import { resolve, normalize } from 'node:path';
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
 }
+
+async function main() {
+  try {
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
+
+    // Only process Write/Edit tools
+    if (!['Write', 'Edit'].includes(hookData.tool_name)) {
+      process.exit(0);
+    }
+
+    const filePath = hookData.tool_input.file_path;
+    const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+
+    // Normalize path
+    const normalizedPath = resolve(projectDir, filePath);
+
+    // Check if path is within project
+    if (!normalizedPath.startsWith(projectDir)) {
+      // Block - path outside project
+      const output = {
+        continue: false,
+        stopReason: 'File path is outside project directory',
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: 'Path traversal detected'
+        }
+      };
+      console.log(JSON.stringify(output));
+      process.exit(2);  // Exit code 2 blocks action
+    }
+
+    // Allow with normalized path
+    const output = {
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+        updatedInput: {
+          ...hookData.tool_input,
+          file_path: normalizedPath
+        }
+      }
+    };
+    console.log(JSON.stringify(output));
+    process.exit(0);
+
+  } catch (error) {
+    console.error('[Hook Critical Error]', error);
+    process.exit(1);
+  }
+}
+
+main();
 ```
 
-**Build & Test**:
-```bash
-cd .claude/hooks
-npm install
-npm run build
-npm test
+### Example 4: SessionStart Hook (Environment Persistence)
+
+**File**: `.claude/hooks/src/sessionStart.ts`
+
+```typescript
+#!/usr/bin/env node
+
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+async function main() {
+  try {
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
+
+    const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    const dbPath = join(projectDir, '.data', 'context.db');
+
+    // Persist environment variables for session
+    if (process.env.CLAUDE_ENV_FILE) {
+      appendFileSync(
+        process.env.CLAUDE_ENV_FILE,
+        `export SESSION_ID="${hookData.session_id}"\n`
+      );
+      appendFileSync(
+        process.env.CLAUDE_ENV_FILE,
+        `export DB_PATH="${dbPath}"\n`
+      );
+      appendFileSync(
+        process.env.CLAUDE_ENV_FILE,
+        `export NODE_ENV="production"\n`
+      );
+    }
+
+    console.log('[SessionStart] Session initialized');
+    process.exit(0);
+
+  } catch (error) {
+    console.error('[Hook Critical Error]', error);
+    process.exit(1);
+  }
+}
+
+main();
 ```
 
 ## Troubleshooting
@@ -831,129 +1289,73 @@ npm test
 
 **Diagnosis**:
 ```bash
-# Check configuration
-cat .claude/hooks.json
+# Check configuration file
+cat .claude/settings.json
 
 # Verify compiled files exist
 ls -l .claude/hooks/dist/
 
-# Check file permissions (Unix/macOS)
-ls -l .claude/hooks/dist/*.js
-
 # Test hook manually
-echo '{"prompt":"test"}' | node .claude/hooks/dist/userPromptSubmit.js
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"test","transcript_path":"","cwd":"","permission_mode":"default","prompt":"test"}' | node .claude/hooks/dist/userPromptSubmit.js
 ```
 
 **Solutions**:
-1. Verify `.claude/hooks.json` path (not `.claude/hooks/hooks.json`)
+1. Verify `.claude/settings.json` exists (NOT `.claude/hooks.json`)
 2. Rebuild TypeScript: `cd .claude/hooks && npm run build`
 3. Check hook points to `.js` file, not `.ts`
 4. Ensure Node.js installed: `node --version`
+5. Check `$CLAUDE_PROJECT_DIR` is used in command
 
 ### Hook Too Slow (>100ms)
 
-**Symptoms**: Laggy user experience, timeout warnings in logs
+**Symptoms**: Laggy user experience
 
 **Diagnosis**:
 ```bash
-# Check p95 latency
-grep "Duration:" logs/hooks.log | \
-  awk -F'Duration: ' '{print $2}' | \
-  sed 's/ms//' | \
-  sort -n | \
-  tail -n 5
+# Check hook execution time
+grep "Duration:" logs/hooks.log | tail -n 20
 ```
 
 **Solutions**:
-1. **Profile execution**:
-   ```typescript
-   console.time('sanitize');
-   const result = sanitize(content);
-   console.timeEnd('sanitize');
-   ```
+1. Profile execution with `console.time()`/`console.timeEnd()`
+2. Optimize regex patterns
+3. Use WAL mode for SQLite
+4. Fire-and-forget pattern (queue event, exit immediately)
 
-2. **Optimize regex** (see [Sanitization Standard](../STANDARDS.md#9-sanitization-standard))
+### Stdin Reading Issues
 
-3. **Use WAL mode**:
-   ```typescript
-   db.pragma('journal_mode = WAL');
-   db.pragma('synchronous = NORMAL');
-   ```
+**Symptoms**: Hook receives empty input
 
-4. **Reduce logging**:
-   ```typescript
-   if (process.env.LOG_LEVEL === 'debug') {
-     log(details);
-   }
-   ```
-
-### Database Locked
-
-**Symptoms**: `SQLITE_BUSY` errors
-
-**Diagnosis**:
-```bash
-# Check WAL mode
-sqlite3 .data/context.db "PRAGMA journal_mode;"
-# Expected: wal
+**Solution**: Use async stdin reading pattern:
+```typescript
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
 ```
 
+### Transcript Not Found (Stop Hook)
+
+**Symptoms**: Cannot read transcript file
+
 **Solutions**:
-1. **Enable WAL mode**:
-   ```typescript
-   db.pragma('journal_mode = WAL');
-   ```
+1. Check transcript_path is absolute path
+2. Verify file exists before reading
+3. Add error handling for missing transcript
 
-2. **Set busy timeout**:
-   ```typescript
-   db.pragma('busy_timeout = 5000');
-   ```
+```typescript
+import { existsSync } from 'node:fs';
 
-3. **Close database connections**:
-   ```typescript
-   db.close();
-   ```
-
-### Compilation Errors
-
-**Symptoms**: `tsc` fails, no `.js` files in `dist/`
-
-**Diagnosis**:
-```bash
-cd .claude/hooks
-npm run build
+if (!existsSync(hookData.transcript_path)) {
+  console.error('Transcript not found:', hookData.transcript_path);
+  process.exit(1);
+}
 ```
-
-**Solutions**:
-1. **Fix TypeScript errors** (strict mode required)
-2. **Check tsconfig.json** (verify `outDir`, `rootDir`)
-3. **Update dependencies**:
-   ```bash
-   npm install --save-dev typescript@latest
-   ```
-
-### Cross-Platform Path Issues
-
-**Symptoms**: Hooks work on macOS/Linux but fail on Windows
-
-**Solutions**:
-1. **Use `path.join()`**:
-   ```typescript
-   import { join } from 'node:path';
-   const dbPath = join(__dirname, '..', '..', '.data', 'context.db');
-   ```
-
-2. **Normalize paths**:
-   ```typescript
-   import { normalize } from 'node:path';
-   const normalized = normalize(userPath);
-   ```
-
-3. **Configure line endings**:
-   ```gitattributes
-   *.js text eol=lf
-   *.ts text eol=lf
-   ```
 
 ## Related Documents
 
@@ -961,18 +1363,19 @@ npm run build
 - [Hooks & Event Capture Architecture](../architecture/architecture-hooks-event-capture-2025-01-16.md)
 - [Sanitization Pipeline Architecture](../architecture/architecture-sanitization-pipeline-2025-01-16.md)
 
-### Standards
-- [Project Standards](../STANDARDS.md) - Section 5: Hook Configuration Standard
-- [Privacy & Data Flow Standard](../STANDARDS.md#1-privacy--data-flow-standard-most-critical)
+### Reviews
+- [Hooks Alignment Remediation Report](../reviews/hooks-alignment-remediation-2025-01-17.md)
 
-### Guides
-- [Phase 1 Hook Development Guide](../guides/guide-phase-1-hook-development-2025-01-16.md)
+### Official Documentation
+- [Claude Code Hooks Reference](https://docs.anthropic.com/en/docs/claude-code/hooks)
+- [Claude Code Hooks Guide](https://docs.anthropic.com/en/docs/claude-code/hooks-guide)
 
 ---
 
-**Last Updated**: 2025-01-16
-**Version**: 1.0.0
-**Canonical Path**: `.claude/hooks.json`
+**Last Updated**: 2025-01-17
+**Version**: 2.0.0 (Aligned with official Claude Code specification)
+**Configuration Location**: `.claude/settings.json` (OFFICIAL)
 **Hook Format**: Compiled `.js` (NOT `ts-node`)
-**IO Method**: `stdin` JSON (canonical)
-**Performance Budget**: <100ms p95
+**IO Method**: `stdin` JSON (official specification)
+**Performance Budget**: <100ms p95 (non-blocking requirement)
+**Timeout**: 60s default (fail-safe)
