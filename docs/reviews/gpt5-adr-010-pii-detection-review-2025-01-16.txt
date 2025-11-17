@@ -1,0 +1,162 @@
+GPT-5 Review of ADR-010: PII Detection Strategy
+Date: 2025-01-16
+Reviewer: GPT-5
+
+Below is a structured review of ADR-010 (PII Detection Strategy) against the requested criteria, with concrete gaps, risks, and actionable recommendations.
+
+1) PII taxonomy completeness
+
+Strengths:
+- Good coverage of several high-confidence deterministic patterns (JWT, PEM keys, CCN with Luhn, SSN, emails, phones, IPs, MACs, common user paths).
+- Tiering by "deterministic vs context-dependent vs novel" is sound.
+
+Key gaps and recommended additions:
+- Secrets, tokens, and credentials:
+  - Cloud and API providers beyond the few listed:
+    - Google API keys (AIza...), Google OAuth tokens (ya29.), GCP service account JSON fields (private_key, client_email, client_id), Azure/SAS tokens (sv=, sig=, se=, sp=), Azure Storage keys (base64 44 chars), Cloudflare tokens, Slack tokens (xoxb-, xoxp-, xoxa-, xoxs-, xoxe-), Stripe secrets (sk_live_, sk_test_, rk_live_, whsec_), Twilio Account SID (AC[0-9a-f]{32}) + Auth Token ([0-9a-f]{32}), Hugging Face (hf_[A-Za-z0-9]{36,}), GitHub extended family (ghp_, gho_, ghs_, ghr_, ghu_), Supabase anon/service keys, Sentry DSNs, Vercel tokens, Notion tokens, Linear, Slack signing secrets, Discord bot tokens, Telegram bot tokens, etc.
+  - Connection strings and credentials:
+    - postgres://, mysql://, mssql://, mongodb:// / mongodb+srv://user:pass@, redis://, amqp://, JDBC URIs, Basic auth in URLs, Authorization headers (Bearer <token>, Basic <b64>, Api-Key: <...>, X-API-Key: <...>).
+  - Cookies and session artifacts:
+    - Set-Cookie/ Cookie headers (sessionid, csrftoken, auth_token, connect.sid, __Secure-*, __Host-*).
+  - Environment variables:
+    - KEY=VALUE heuristics specifically for sensitive keys (SECRET, TOKEN, KEY, PASSWORD, PRIVATE, CLIENT_SECRET, API_KEY, AUTH, ACCESS_TOKEN, REFRESH_TOKEN). Treat generic KEY=VALUE as non-PII unless name indicates sensitivity and value length/entropy crosses thresholds.
+  - High-entropy strings:
+    - Add an entropy-based detector (length ≥ 20-24, high Shannon entropy, base64/base64url/hex-like alphabet) to catch novel keys. Use this with strict context/length limits to control FPs.
+- Personal and regulated identifiers (international):
+  - Passport numbers, driver's licenses (jurisdiction-specific), national IDs (UK NINO, CA SIN, IN Aadhaar, EU national IDs), IBANs, bank account/routing numbers, MRN/health plan numbers (HIPAA PHI), VINs/license plates (contextual), geolocation (lat,long pairs with realistic ranges), date of birth, street addresses (US + international formats).
+- Device identifiers:
+  - IMEI (Luhn), IMSI, MAC with hyphens, Android Advertising ID/IDFA (UUID-like), Apple UDID (legacy formats).
+- IP addresses nuance:
+  - Consider not redacting RFC 5737 documentation ranges and local/private ranges (127.0.0.1, 0.0.0.0, RFC1918, fd00::/8) by default to reduce utility loss; treat public IPs as more sensitive than private/reserved.
+- File paths:
+  - Expand Windows variants (C:\Users\..., C:\Documents and Settings\..., AppData\Roaming, ProgramData). Avoid redacting public/shared paths (C:\Users\Public) unless user-specific.
+- Names and organizations:
+  - Keep in Tier 2; add addresses and dates to Tier 2. Explicitly exclude code identifiers (variables, imports) via lexical/context heuristics.
+- Images/attachments:
+  - Out of scope for MVP, but explicitly note future OCR pass for screenshots/images if the product will handle them.
+
+2) Clarity and feasibility of the 2-stage approach
+
+Strengths:
+- Clean split: Stage 1 synchronous rules in-hook before persistence; Stage 2 async AI after persistence. This matches the <50ms and <2s budgets in STANDARDS.
+- Async queue design and avoidance of LLM in the synchronous path is appropriate.
+
+Gaps/clarifications needed:
+- Positions and patching after Stage 2:
+  - Stage 2 operates on sanitized text; good. Explicitly define how Stage 2 detections trigger an in-place patch to stored content (update message row), how you version the content (sanitized_revision), and how you record detectorVersion in sanitization_log to support reproducibility and rollbacks.
+- Idempotency and race conditions:
+  - Define how repeated Stage 2 runs or concurrent workers reconcile overlapping detections; recommend a "re-sanitize until stable" approach and an idempotent patcher keyed by message_id + revision.
+- Normalization before Stage 1:
+  - To make "known-pattern" detection robust, document a canonical normalization step: Unicode NFKC, strip zero-width chars, normalize whitespace, decode common HTML entities. Consider scanning for base64url artifacts (JWT-like) and light decoding heuristics for clearly marked encodings (e.g., Basic <b64>).
+- Entropy detector placement:
+  - Consider an optional fast entropy detector in Stage 1 for strings > N characters with high entropy and likely secret context (var name or key label). Tune thresholds and restrict contexts to keep FPs below target.
+- Rule performance:
+  - Call out regex safety explicitly: precompile, avoid catastrophic backtracking, prefer atomic groups/specific char classes, bound repetitions, and cap input length examined per pass. Clarify max message length and how streaming mode intersects with Stage 1 to maintain the <50ms p95 budget on long inputs.
+- Logging and persistence of originals:
+  - ADR-010 says Detection.original must NEVER be persisted. Ensure sanitize() returns two shapes: an in-memory detections array (with original) and a persisted/loggable version that strips original and stores only category, placeholder, and positions relative to sanitized content. Review ADR-004 sample logSanitization(text, sanitized, allDetections) to guarantee it never writes raw "text" or Detection.original to disk.
+- Placeholder consistency:
+  - ADR-010 shows [REDACTED_TYPE] and <TYPE_N> interchangeably. STANDARDS section 9 defines [REDACTED_*] for irreversible and <TYPE_n> for optional pseudonymization. Pick one canonical default and stick to it; document precisely when pseudonymization is enabled and how counters are assigned deterministically per session.
+- Pseudonymization mapping storage:
+  - ADR-010 proposes "encrypted mapping stored separately." STANDARDS 1 says NEVER persist raw data. Storing the original->placeholder map on disk violates that, even if encrypted. Recommendation: keep the mapping in-memory only (process memory, session cache) and never persist it. If you must persist for product reasons, you need an explicit exception ADR, KMS-backed envelope encryption, short TTL, and a strong risk justification.
+
+3) Explicit accuracy/utility tradeoff
+
+Strengths:
+- Targets are stated for FPR/FNR and latency per stage, and combined.
+- Utility-vs-privacy tradeoff is acknowledged across tiers.
+
+Concerns and recommendations:
+- "0% FN for known patterns" is not realistically provable. Reframe as "0 known FN on canary suite and regression set; design target is effectively 0 FN across enumerated patterns with normalization and adversarial tests." Add a commitment to monitor and quickly add new patterns within SLA when misses are found.
+- Category-specific thresholds:
+  - Consider separate precision/recall targets per category. For example, API keys and credentials should target near-zero FN even at the expense of higher FP; personal names should favor lower FP to preserve utility.
+- Evaluation methodology:
+  - Define a labeled evaluation corpus and sampling approach (mixture of real, synthetic, adversarial, obfuscated). Include k-fold estimates with confidence intervals. Specify how you measure FPR/FNR separately on deterministic vs context-dependent classes.
+- Reserved/non-sensitive allowlists:
+  - To reduce FP, formalize allowlists: localhost/127.0.0.1/private IPs, dummy emails (example.com/.org/.net), documentation IP ranges (RFC 5737), obviously public sample tokens. Consider mask-only for credit cards (e.g., keep last 4) to preserve some utility while meeting PCI obligations.
+
+4) Audit and validation plan
+
+Strengths:
+- Solid pre-deploy (canary, property-based, adversarial) and post-deploy (sampling, canary injection, user reporting, kill-switch) plan.
+- ValidationReport schema is sensible; alert thresholds are explicit.
+
+Gaps and recommendations:
+- Sampling effectiveness:
+  - Since only sanitized content is stored, post-ingest audits still work because missed PII remains present. Make this explicit to avoid confusion. Additionally, add "seeded canaries" in live traffic (synthetic innocuous markers) to catch regressions reliably without exposing real PII.
+- Alignment with STANDARDS status enums:
+  - ADR-004 shows setting conversations.status = "QUARANTINED". STANDARDS section 3 eliminates "quarantined." Use the canonical job status enums and/or a separate quarantine table/flag outside the job enum, or soft-delete/disable the message without violating the enum standard.
+- Human-in-the-loop:
+  - Specify the manual review path for borderline detections flagged by Stage 2 (confidence band), including reviewer SLAs, sampling rates, and reviewer tooling that never shows raw originals (only sanitized text and context).
+- Versioning and rollback:
+  - Log detectorVersion and sanitized_revision. If audits find PII, define the automated remediation path (re-run rules + AI, patch content, notify) and incident response thresholds (halt uploads, notify DPO).
+- Metrics by category:
+  - Track per-category FP/FN and redaction rates; tie to alert thresholds (e.g., surge in "PERSON_NAME" redactions > X% p95 may indicate over-redaction due to prompt drift).
+
+5) Alignment with STANDARDS.md
+
+Good alignment:
+- Pre-sanitize synchronously in hook; never persist raw. Matches section 1 and 9.
+- Async AI validation downstream. Matches section 9 budgets.
+- Sanitization_log/audit evidence aligns with STANDARDS logging guidance.
+
+Misalignments and fixes:
+- "Quarantined" status: STANDARDS section 3 forbids it. Replace with:
+  - Soft-delete/disabled flag on messages, or
+  - Move offending records to a quarantine table, or
+  - Use job_queue dead_letter for jobs, and a separate non-enum field for message quarantine that doesn't overload job status.
+- Placeholder format inconsistency:
+  - Conform to STANDARDS section 9. Use [REDACTED_*] for irreversible by default; only use <TYPE_n> when pseudonymization is explicitly enabled.
+- Never persist originals:
+  - Ensure detection logs and sanitization_log never include original strings. Provide a separate PersistedDetection type without original.
+- Pseudonymization mapping persistence:
+  - STANDARDS says never persist raw. Keep mapping in-memory only. If the product mandates persistence, update STANDARDS with a narrowly-scoped exception and controls (KMS, sealed storage, <24h TTL, rigorous audits).
+- Hook performance and build:
+  - ADR references running in the hook; ensure examples reflect compiled JS and hooks.json path per section 5. Avoid ts-node at runtime.
+
+Technical feasibility and implementation recommendations
+
+- Regex and performance:
+  - Precompile patterns; constrain character classes; use possessive quantifiers/atomic groups where available; bound repetitions; add timeouts; test worst-case inputs for catastrophic backtracking. Maintain a fuzz corpus for regex DoS.
+- Normalization and obfuscation resistance:
+  - NFKC normalize; strip zero-width chars; compress whitespace; lowercase for case-insensitive matches; decode URL-encoded segments in URLs; inspect Base64/Base64URL windows when strongly indicated by context (Authorization: Basic, JWT segments).
+- Entropy and context heuristics:
+  - Entropy detector plus name/keyword context (secret, token, password, key, bearer, cookie, auth, x-amz-, x-goog-) helps catch novel secrets with fewer FPs.
+- Reserved/public allowlists:
+  - Don't redact example.com/.org/.net, localhost, reserved IPs (RFC5737), private IPs (optional), and well-known non-secret keys (e.g., Firebase web apiKey) unless policy says otherwise.
+- Structured data:
+  - Add a key-based JSON/YAML detector that flags values for keys like password, secret, token, api_key, client_secret. This is faster and more precise than regex alone on unstructured text.
+- Stage 2 LLM output contract:
+  - Prefer function/tool calling or JSON schema validation to ensure strict, machine-parseable results. Include a schema with start/end indices relative to sanitized text and a category enum.
+- Dataset and benchmarking:
+  - Build a balanced, labeled corpus: public PII datasets, synthetic generators (with obfuscations), category-specific adversarial sets. Report per-category precision/recall, overall ROC/AUC, and latency distributions (p50/p95/p99) on realistic message sizes.
+- Update pipeline:
+  - Document a pattern update workflow (rapid rule rollout, feature flags, canary deploy, fast rollback).
+- Rate limiting and backpressure:
+  - Stage 2 job queue should have per-tenant rate limits, timeouts, circuit breakers, and drop/degrade behavior under load (e.g., skip PERSON_NAME detection if backlog > threshold).
+- Internationalization:
+  - Plan for multilingual names, addresses, phone formats. Consider locale-aware phone parsing (e.g., libphonenumber) and address heuristics in Stage 2.
+
+Actionable change list
+
+- Expand PII taxonomy to include the secrets, credentials, IDs, and device identifiers listed above; add entropy-based detection and structured key-value detection.
+- Add a normalization step prior to Stage 1 and document it.
+- Revise "0% FN for known patterns" phrasing and commit to "0 known FN on the regression suite," with an SLA for adding new patterns.
+- Unify placeholder formats per STANDARDS section 9; document default and pseudonymization modes precisely.
+- Prohibit persistence of Detection.original; create a PersistedDetection shape for logs without original values; fix sample code that passes "text" to logSanitization.
+- Replace "quarantined" status with a standards-compliant mechanism (soft-delete/disabled flag or quarantine table).
+- Specify the Stage 2 remediation workflow: how AI detections patch stored content, versioning (sanitized_revision), detectorVersion logging, idempotency, and race handling.
+- Add category-specific thresholds and per-category metrics/alerts.
+- Clarify policy for IP addresses (public vs private/reserved) and credit cards (mask last 4 if utility requires).
+- Document Stage 2 output schema and strict parsing; consider function calling/tool use.
+- Add a structured JSON/YAML secret detector and Authorization/Cookie header detectors.
+- Decide and document pseudonymization mapping storage as in-memory only to comply with STANDARDS; if not feasible, propose an exception ADR with controls.
+
+Overall assessment
+
+- Completeness: Good foundation, but the taxonomy needs significant expansion for secrets/tokens, credentials, and international identifiers; add entropy/context heuristics.
+- 2-stage approach: Sound and feasible; clarify normalization, post-persist patching, idempotency, and logging of "original."
+- Accuracy/utility tradeoff: Targets are stated; make them category-specific and ground them in a rigorous evaluation plan; soften the absolute 0% FN claim.
+- Audit plan: Strong, but fix the status misalignment, formalize remediation/versioning, and strengthen sampling with seeded canaries and per-category metrics.
+- Standards alignment: Mostly aligned, with specific fixes needed for placeholder consistency, "quarantined" usage, and never persisting raw originals or pseudonym mappings.
+
+With these adjustments, ADR-010 would be complete, accurate, technically feasible, and fully aligned with the project standards and common regulatory expectations (GDPR/CCPA, HIPAA identifiers, PCI DSS for PAN masking, and NIST SP 800-122/ISO 27018 principles).

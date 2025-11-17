@@ -1,0 +1,683 @@
+# TDD Workflow Guide
+
+> Master the Red-Green-Refactor cycle with AI-powered subagents
+
+---
+title: TDD Workflow with Subagents Guide
+category: guide
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [guide, tdd, testing, red-green-refactor, workflow]
+---
+
+## Overview
+
+This guide teaches you Test-Driven Development (TDD) enhanced with AI subagents. You'll learn the Red-Green-Refactor cycle where subagents generate tests, implement code, and validate quality automatically.
+
+**Time to complete**: 60-90 minutes
+
+## What You'll Learn
+
+- The Red-Green-Refactor cycle with subagents
+- How to write failing tests first (RED)
+- Implementing minimal code to pass (GREEN)
+- Refactoring with confidence (REFACTOR)
+- Complete TDD workflow end-to-end
+- Avoiding common TDD pitfalls
+
+## Prerequisites
+
+- **Testing Harness Complete**: [guide-testing-harness-usage-2025-01-16.md](./guide-testing-harness-usage-2025-01-16.md)
+- **Subagents Guide Complete**: [guide-using-subagents-2025-01-16.md](./guide-using-subagents-2025-01-16.md)
+- **Phase 0 Setup Complete**: [guide-phase-0-foundation-setup-2025-01-16.md](./guide-phase-0-foundation-setup-2025-01-16.md)
+
+## TDD Philosophy
+
+### Why Test First?
+
+**Traditional Development** (Code-First):
+```
+Implement → Test → Debug → Fix → Repeat
+```
+Result: Tests miss edge cases, low coverage, bugs slip through
+
+**Test-Driven Development** (Test-First):
+```
+Test → Implement → Validate → Refactor
+```
+Result: Comprehensive tests, high coverage, confidence in changes
+
+### Benefits with Subagents
+
+1. **Comprehensive Tests**: AI generates edge cases you might miss
+2. **Quality Validation**: Automated quality gates ensure standards
+3. **Faster Iteration**: Parallel generation and validation
+4. **Consistent Patterns**: Subagents follow best practices
+5. **Built-in Documentation**: Tests serve as specifications
+
+## The Red-Green-Refactor Cycle
+
+```
+🔴 RED   → Write failing test
+🟢 GREEN → Minimal code to pass
+🔵 REFACTOR → Improve while keeping tests green
+✅ VALIDATE → Quality gates pass
+```
+
+## Step 1: RED Phase - Write Failing Test
+
+### 1.1 Delegate to Test Generator
+
+**Goal**: Generate a comprehensive, failing test
+
+Create `src/workflows/red-phase.ts`:
+
+```typescript
+import { invokeSubagent } from '../agents/orchestration/invoke';
+import { testGeneratorSubagents } from '../agents/subagents/test-generators';
+
+export async function redPhase(featureDescription: string): Promise<string> {
+  console.log('🔴 RED PHASE: Generating failing test\n');
+
+  const testCode = await invokeSubagent(
+    'unit-test-generator',
+    `Generate comprehensive failing test for:
+
+${featureDescription}
+
+Requirements:
+- Test happy path
+- Test edge cases: null, undefined, empty, very large inputs
+- Test error conditions
+- Use clear, descriptive names
+- Follow arrange-act-assert pattern
+- Aim for >85% coverage when implemented
+
+The function doesn't exist yet - expect compilation errors.`,
+    { agents: testGeneratorSubagents }
+  );
+
+  return testCode;
+}
+```
+
+### 1.2 Validate Test Quality
+
+```typescript
+import { validateTestQuality } from '../agents/workflows/validate-tests';
+
+export async function validateRedPhase(testFilePath: string): Promise<void> {
+  console.log('📊 Validating test quality...\n');
+
+  const validation = await validateTestQuality(testFilePath);
+
+  if (validation.score < 0.8) {
+    throw new Error(
+      `Test quality insufficient: ${validation.score}\nIssues: ${validation.issues.join(', ')}`
+    );
+  }
+
+  console.log(`✓ Test quality score: ${validation.score}`);
+  if (validation.issues.length > 0) {
+    console.log(`  Suggestions: ${validation.issues.join(', ')}`);
+  }
+}
+```
+
+### 1.3 Run Test (Confirm Failure)
+
+```typescript
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export async function confirmTestFails(testPattern: string): Promise<void> {
+  console.log('▶ Running test (expecting failure)...\n');
+
+  try {
+    await execAsync(`npm run test:once -- ${testPattern}`);
+    throw new Error('⚠ WARNING: Test passed before implementation!');
+  } catch (error: any) {
+    if (error.message.includes('WARNING')) {
+      throw error;
+    }
+    console.log('✓ Test failed as expected (good!)');
+    console.log('  Error:', error.message.split('\n')[0]);
+  }
+}
+```
+
+### 1.4 Complete RED Phase Example
+
+```typescript
+export async function completeRedPhase(
+  featureDescription: string,
+  testFilePath: string
+): Promise<string> {
+  // 1. Generate test
+  const testCode = await redPhase(featureDescription);
+
+  // 2. Write test file
+  writeFileSync(testFilePath, testCode);
+  console.log(`✓ Test written to: ${testFilePath}\n`);
+
+  // 3. Validate quality
+  await validateRedPhase(testFilePath);
+
+  // 4. Confirm it fails
+  await confirmTestFails(testFilePath);
+
+  console.log('\n🔴 RED PHASE COMPLETE\n');
+  return testCode;
+}
+```
+
+**Verification Checklist**:
+- ✅ Test generated by subagent
+- ✅ Test quality score ≥ 0.8
+- ✅ Test fails for the right reason (function doesn't exist)
+- ✅ Test is comprehensive (happy path + edge cases)
+
+## Step 2: GREEN Phase - Minimal Implementation
+
+### 2.1 Delegate to Implementation Agent
+
+**Goal**: Write minimal code to make tests pass
+
+Create `src/workflows/green-phase.ts`:
+
+```typescript
+import { invokeSubagent } from '../agents/orchestration/invoke';
+import { implementationSubagents } from '../agents/subagents/implementation';
+
+export async function greenPhase(
+  testCode: string,
+  featureDescription: string
+): Promise<string> {
+  console.log('🟢 GREEN PHASE: Implementing minimal code\n');
+
+  const implementationCode = await invokeSubagent(
+    'code-writer', // or specific agent like 'sanitization-developer'
+    `Implement MINIMAL code to pass these tests:
+
+Feature: ${featureDescription}
+
+Tests:
+${testCode}
+
+Requirements:
+- Write simplest possible implementation
+- Don't over-engineer
+- Handle all test cases
+- Use strict TypeScript types
+- Add JSDoc comments
+- Focus on making tests pass, not perfection`,
+    { agents: implementationSubagents }
+  );
+
+  return implementationCode;
+}
+```
+
+### 2.2 Run Tests (Confirm Pass)
+
+```typescript
+export async function confirmTestsPass(testPattern: string): Promise<void> {
+  console.log('▶ Running tests (expecting success)...\n');
+
+  try {
+    const { stdout } = await execAsync(`npm run test:once -- ${testPattern}`);
+    console.log('✓ All tests passing!');
+
+    // Extract test count
+    const match = stdout.match(/(\d+) passed/);
+    if (match) {
+      console.log(`  Passed: ${match[1]} tests`);
+    }
+  } catch (error: any) {
+    console.error('✗ Tests still failing:');
+    console.error(error.message);
+    throw new Error('GREEN phase failed: tests not passing');
+  }
+}
+```
+
+### 2.3 Validate Implementation
+
+```typescript
+import { invokeSubagent } from '../agents/orchestration/invoke';
+import { validatorSubagents } from '../agents/subagents/validators';
+
+export async function validateImplementation(
+  testCode: string,
+  implCode: string
+): Promise<void> {
+  console.log('📊 Validating implementation quality...\n');
+
+  const validationResult = await invokeSubagent(
+    'code-quality-validator',
+    `Validate this implementation:
+
+Tests:
+${testCode}
+
+Implementation:
+${implCode}
+
+Check for:
+- All tests pass
+- Handles all edge cases
+- No security issues
+- Proper error handling
+- Type safety
+- Code quality
+
+Return JSON: { "score": 0.9, "passed": true, "issues": [] }`,
+    { agents: validatorSubagents }
+  );
+
+  const validation = JSON.parse(validationResult);
+
+  if (!validation.passed || validation.score < 0.8) {
+    throw new Error(
+      `Implementation quality insufficient: ${validation.score}\nIssues: ${validation.issues.join(', ')}`
+    );
+  }
+
+  console.log(`✓ Implementation quality score: ${validation.score}`);
+}
+```
+
+### 2.4 Complete GREEN Phase Example
+
+```typescript
+export async function completeGreenPhase(
+  testCode: string,
+  featureDescription: string,
+  implFilePath: string,
+  testPattern: string
+): Promise<string> {
+  // 1. Generate implementation
+  const implCode = await greenPhase(testCode, featureDescription);
+
+  // 2. Write implementation file
+  writeFileSync(implFilePath, implCode);
+  console.log(`✓ Implementation written to: ${implFilePath}\n`);
+
+  // 3. Run tests
+  await confirmTestsPass(testPattern);
+
+  // 4. Validate implementation
+  await validateImplementation(testCode, implCode);
+
+  console.log('\n🟢 GREEN PHASE COMPLETE\n');
+  return implCode;
+}
+```
+
+**Verification Checklist**:
+- ✅ Minimal implementation (not over-engineered)
+- ✅ All tests pass
+- ✅ Implementation quality score ≥ 0.8
+- ✅ No security issues
+- ✅ Proper type safety
+
+## Step 3: REFACTOR Phase - Improve Quality
+
+### 3.1 Identify Improvement Opportunities
+
+**Goal**: Clean up code while keeping tests green
+
+Create `src/workflows/refactor-phase.ts`:
+
+```typescript
+import { invokeSubagent } from '../agents/orchestration/invoke';
+import { implementationSubagents } from '../agents/subagents/implementation';
+
+export async function identifyRefactorings(implCode: string): Promise<string[]> {
+  console.log('🔵 REFACTOR PHASE: Analyzing code...\n');
+
+  const analysis = await invokeSubagent(
+    'code-quality-validator',
+    `Analyze this code for refactoring opportunities:
+
+${implCode}
+
+Look for:
+- Code duplication
+- Long functions (>20 lines)
+- Complex conditionals
+- Magic numbers
+- Unclear variable names
+- Missing abstractions
+
+Return JSON array of specific refactorings: ["Extract regex to constant", ...]`,
+    { agents: implementationSubagents }
+  );
+
+  return JSON.parse(analysis);
+}
+```
+
+### 3.2 Apply Refactorings
+
+```typescript
+export async function applyRefactoring(
+  implCode: string,
+  refactoring: string
+): Promise<string> {
+  console.log(`  Applying: ${refactoring}`);
+
+  const refactoredCode = await invokeSubagent(
+    'code-writer',
+    `Refactor this code:
+
+Current Code:
+${implCode}
+
+Refactoring: ${refactoring}
+
+Requirements:
+- Apply refactoring only
+- Don't change functionality
+- Keep code working
+- Improve readability/maintainability`,
+    { agents: implementationSubagents }
+  );
+
+  return refactoredCode;
+}
+```
+
+### 3.3 Test After Each Refactoring
+
+```typescript
+export async function refactorWithTesting(
+  implCode: string,
+  testPattern: string
+): Promise<string> {
+  const refactorings = await identifyRefactorings(implCode);
+
+  if (refactorings.length === 0) {
+    console.log('✓ No refactorings needed\n');
+    return implCode;
+  }
+
+  console.log(`Found ${refactorings.length} refactoring opportunities\n`);
+
+  let currentCode = implCode;
+
+  for (const refactoring of refactorings) {
+    // Apply refactoring
+    currentCode = await applyRefactoring(currentCode, refactoring);
+
+    // Run tests immediately
+    try {
+      await confirmTestsPass(testPattern);
+      console.log(`  ✓ Tests still passing\n`);
+    } catch (error) {
+      console.error(`  ✗ Tests failed after refactoring!`);
+      throw new Error(`Refactoring broke tests: ${refactoring}`);
+    }
+  }
+
+  return currentCode;
+}
+```
+
+### 3.4 Complete REFACTOR Phase Example
+
+```typescript
+export async function completeRefactorPhase(
+  implCode: string,
+  implFilePath: string,
+  testPattern: string
+): Promise<string> {
+  console.log('🔵 REFACTOR PHASE: Improving code quality\n');
+
+  // 1. Apply refactorings
+  const refactoredCode = await refactorWithTesting(implCode, testPattern);
+
+  // 2. Write refactored code
+  writeFileSync(implFilePath, refactoredCode);
+
+  // 3. Final validation
+  await validateImplementation('', refactoredCode);
+
+  console.log('\n🔵 REFACTOR PHASE COMPLETE\n');
+  return refactoredCode;
+}
+```
+
+**Verification Checklist**:
+- ✅ Code quality improved
+- ✅ Tests still passing after each change
+- ✅ No functionality changed
+- ✅ Code more maintainable
+- ✅ Quality score increased
+
+## Step 4: Complete TDD Cycle
+
+### 4.1 Full Workflow
+
+Create `src/workflows/complete-tdd-cycle.ts`:
+
+```typescript
+import { completeRedPhase } from './red-phase';
+import { completeGreenPhase } from './green-phase';
+import { completeRefactorPhase } from './refactor-phase';
+import { getCoverageViaMCP } from '../agents/workflows/run-tests';
+
+export async function completeTDDCycle(
+  featureDescription: string,
+  testFilePath: string,
+  implFilePath: string
+): Promise<void> {
+  console.log('═══ TDD CYCLE START ═══\n');
+  console.log(`Feature: ${featureDescription}\n`);
+
+  const testPattern = testFilePath.replace(/^src\//, '').replace(/\.test\.ts$/, '');
+
+  try {
+    // RED: Write failing test
+    const testCode = await completeRedPhase(featureDescription, testFilePath);
+
+    // GREEN: Implement minimal code
+    const implCode = await completeGreenPhase(
+      testCode,
+      featureDescription,
+      implFilePath,
+      testPattern
+    );
+
+    // REFACTOR: Improve code quality
+    await completeRefactorPhase(implCode, implFilePath, testPattern);
+
+    // COVERAGE: Verify coverage
+    console.log('📈 Checking coverage...\n');
+    const coverage = await getCoverageViaMCP();
+    console.log('Coverage:', coverage);
+
+    if (coverage.lines < 85) {
+      console.warn(`⚠ Warning: Coverage ${coverage.lines}% < 85%`);
+    } else {
+      console.log('✓ Coverage excellent\n');
+    }
+
+    console.log('═══ TDD CYCLE COMPLETE ═══');
+    console.log('✅ Feature implemented with tests');
+  } catch (error) {
+    console.error('\n✗ TDD cycle failed:', error);
+    throw error;
+  }
+}
+```
+
+### 4.2 Example Usage
+
+Create `src/workflows/examples/sanitize-api-keys-tdd.ts`:
+
+```typescript
+import { config } from 'dotenv';
+import { completeTDDCycle } from '../complete-tdd-cycle';
+
+config();
+
+async function main() {
+  await completeTDDCycle(
+    'Function sanitizeApiKeys(text: string): string that redacts all API keys and tokens in text',
+    'src/sanitization/sanitize.test.ts',
+    'src/sanitization/sanitize.ts'
+  );
+}
+
+main().catch(console.error);
+```
+
+Run it:
+
+```bash
+ts-node src/workflows/examples/sanitize-api-keys-tdd.ts
+```
+
+**Expected output**:
+```
+═══ TDD CYCLE START ═══
+
+Feature: Function sanitizeApiKeys(text: string): string...
+
+🔴 RED PHASE: Generating failing test
+  → Invoking: unit-test-generator
+  ✓ Completed: unit-test-generator
+✓ Test written to: src/sanitization/sanitize.test.ts
+
+📊 Validating test quality...
+✓ Test quality score: 0.92
+
+▶ Running test (expecting failure)...
+✓ Test failed as expected (good!)
+
+🔴 RED PHASE COMPLETE
+
+🟢 GREEN PHASE: Implementing minimal code
+  → Invoking: code-writer
+  ✓ Completed: code-writer
+✓ Implementation written to: src/sanitization/sanitize.ts
+
+▶ Running tests (expecting success)...
+✓ All tests passing!
+  Passed: 8 tests
+
+📊 Validating implementation quality...
+✓ Implementation quality score: 0.88
+
+🟢 GREEN PHASE COMPLETE
+
+🔵 REFACTOR PHASE: Improving code quality
+  Applying: Extract regex patterns to constants
+  ✓ Tests still passing
+  Applying: Extract validation to helper function
+  ✓ Tests still passing
+
+🔵 REFACTOR PHASE COMPLETE
+
+📈 Checking coverage...
+Coverage: { lines: 94.2, statements: 92.1, functions: 100, branches: 87.5 }
+✓ Coverage excellent
+
+═══ TDD CYCLE COMPLETE ═══
+✅ Feature implemented with tests
+```
+
+## Step 5: Commit Discipline
+
+### 5.1 Commit After Each Phase
+
+```typescript
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export async function commitPhase(
+  phase: 'red' | 'green' | 'refactor',
+  message: string
+): Promise<void> {
+  await execAsync('git add .');
+  await execAsync(`git commit -m "${phase.toUpperCase()}: ${message}"`);
+  console.log(`✓ Committed: ${phase} phase\n`);
+}
+```
+
+Usage:
+
+```typescript
+// After RED
+await commitPhase('red', 'Add failing tests for sanitizeApiKeys');
+
+// After GREEN
+await commitPhase('green', 'Implement sanitizeApiKeys to pass tests');
+
+// After REFACTOR
+await commitPhase('refactor', 'Extract regex patterns to constants');
+```
+
+## Common Pitfalls and Solutions
+
+### Pitfall 1: Skipping Test Generation
+
+❌ **Wrong**: "Tests take too long, I'll just implement"
+
+✅ **Right**: "Tests first, always. Use subagents to generate fast"
+
+### Pitfall 2: Over-Implementation in GREEN
+
+❌ **Wrong**: Implementing perfect, production-ready code in GREEN phase
+
+✅ **Right**: Simplest possible code to pass tests. Improve in REFACTOR.
+
+### Pitfall 3: Changing Tests After GREEN
+
+❌ **Wrong**: Tests fail, so change tests to match implementation
+
+✅ **Right**: Tests define requirements. Fix implementation, not tests.
+
+### Pitfall 4: Skipping REFACTOR
+
+❌ **Wrong**: "It works, ship it"
+
+✅ **Right**: Clean code is as important as working code. Always refactor.
+
+### Pitfall 5: Large Test Suites at Once
+
+❌ **Wrong**: Write 50 tests, then implement everything
+
+✅ **Right**: One test at a time, or small batches. Keep cycle fast.
+
+## Verification
+
+You're doing TDD correctly when:
+
+- ✅ You always write tests first
+- ✅ Tests fail before implementation
+- ✅ You write minimal code to pass
+- ✅ Tests pass after implementation
+- ✅ You refactor with confidence
+- ✅ Coverage is >85%
+- ✅ All quality gates pass
+
+## Next Steps
+
+Now apply TDD to real features:
+
+1. [Phase 1 Hook Development](./guide-phase-1-hook-development-2025-01-16.md) - Apply TDD to hooks
+2. [Phase 2 Sanitization](../plans/plan-phase-2-sanitization-2025-01-16.md) - TDD for sanitization
+3. Continue TDD for all features
+
+## Related Documents
+
+- [Testing Harness Architecture](../architecture/architecture-testing-harness-2025-01-16.md)
+- [Subagent System Architecture](../architecture/architecture-subagent-system-2025-01-16.md)
+- [Testing Strategy](../reference/reference-testing-strategy-2025-01-16.md)

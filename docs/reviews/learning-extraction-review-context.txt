@@ -1,0 +1,3409 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: docs/STANDARDS.md, docs/architecture/architecture-learning-extraction-2025-01-16.md, docs/architecture/architecture-global-context-network-2025-01-16.md, docs/reference/reference-database-schema-2025-01-16.md
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+docs/
+  architecture/
+    architecture-global-context-network-2025-01-16.md
+    architecture-learning-extraction-2025-01-16.md
+  reference/
+    reference-database-schema-2025-01-16.md
+  STANDARDS.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="docs/architecture/architecture-global-context-network-2025-01-16.md">
+# Global Context Network - System Architecture
+
+> Complete system architecture for the Global Context Network MVP
+
+---
+title: Global Context Network System Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [architecture, system-design, blockchain, privacy, subagents]
+---
+
+## Overview
+
+The Global Context Network is a decentralized system for capturing, sanitizing, storing, and sharing AI agent learnings globally. It enables agents to learn from each other's experiences while maintaining strict privacy guarantees through PII sanitization before storage.
+
+### Core Innovation
+
+**"Mining through Learning"**: Instead of computational mining, users contribute valuable learnings to the network and receive token rewards based on quality and validation.
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Claude Code (User Agent)                         │
+└────────────┬─────────────────────────────────────┬──────────────────────┘
+             │                                      │
+             ▼ UserPromptSubmit                    ▼ Stop
+    ┌────────────────┐                    ┌───────────────┐
+    │  Hook Handler  │                    │  Hook Handler │
+    └────────┬───────┘                    └───────┬───────┘
+             │                                      │
+             └──────────────┬──────────────────────┘
+                            ▼
+                 ┌──────────────────────┐
+                 │  Event Collector     │
+                 │  (Captures events)   │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Event Queue        │
+                 │   (Persistent)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Sanitization Queue  │
+                 │  (Async Worker)      │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+              ┌─────────────────────────────┐
+              │   Sanitization Pipeline     │
+              │  ┌────────────────────────┐ │
+              │  │ Rule-Based Detector    │ │
+              │  │ (Regex, Fast)          │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ AI-Powered Sanitizer   │ │
+              │  │ (Context-Aware)        │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ Hybrid Validator       │ │
+              │  │ (Combine Results)      │ │
+              │  └──────────┬─────────────┘ │
+              └─────────────┼───────────────┘
+                            │
+                            ▼ SANITIZED DATA ONLY
+                 ┌──────────────────────┐
+                 │   SQLite Database    │
+                 │  ┌────────────────┐  │
+                 │  │ Conversations  │  │
+                 │  │ Messages       │  │
+                 │  │ Learnings      │  │
+                 │  │ Job Queue      │  │
+                 │  │ Uploads        │  │
+                 │  └────────────────┘  │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │ Learning Extractor   │
+                 │ (Async Worker)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Quality Filter      │
+                 │  (Score & Validate)  │
+                 └──────────┬───────────┘
+                            │
+                            ├──────────────────┐
+                            │                  │
+                            ▼                  ▼
+                 ┌──────────────────┐  ┌──────────────────┐
+                 │   MCP Server     │  │  Mining Queue    │
+                 │  (Query Access)  │  │  (Upload)        │
+                 └──────────────────┘  └────────┬─────────┘
+                            │                    │
+                            │                    ▼
+                            │         ┌──────────────────┐
+                            │         │  IPFS Upload     │
+                            │         └────────┬─────────┘
+                            │                  │
+                            │                  ▼
+                            │         ┌──────────────────┐
+                            │         │ Blockchain Tx    │
+                            │         │ (Token Rewards)  │
+                            │         └──────────────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Agent Clients      │
+                 │ (Query via MCP)      │
+                 └──────────────────────┘
+```
+
+## Core Components
+
+### 1. Event Capture Layer
+
+**Purpose**: Capture Claude Code conversations without blocking the user
+
+**Components**:
+- **UserPromptSubmit Hook**: Captures user input
+- **Stop Hook**: Captures agent responses
+- **Event Collector**: Aggregates events into conversations
+- **Event Queue**: Persists events (SQLite-based)
+
+**Key Requirements**:
+- Hook execution < 100ms
+- Never block user interaction
+- Fail silently with logging
+- Persist events across restarts
+
+### 2. Sanitization Pipeline
+
+**Purpose**: Remove ALL PII before database storage
+
+**Components**:
+- **Rule-Based Detector**: Fast regex-based PII detection
+- **AI Sanitizer**: Context-aware detection using LLM
+- **Hybrid Validator**: Combines both approaches
+- **Audit Logger**: Tracks what was redacted
+
+**PII Categories**:
+1. API Keys & Secrets
+2. File Paths (absolute with usernames)
+3. Email Addresses
+4. IP Addresses
+5. Names (person names, not variables)
+6. Phone Numbers
+7. URLs with tokens
+
+**Critical Guarantee**: NEVER store raw data. Sanitization happens BEFORE database insert.
+
+### 3. Storage Layer
+
+**Purpose**: Persist sanitized conversations and learnings
+
+**Database**: SQLite with migrations
+
+**Tables**:
+- `conversations`: Sanitized conversation metadata
+- `messages`: Individual sanitized messages
+- `learnings`: Extracted insights and patterns
+- `job_queue`: Async job tracking
+- `uploads`: Network upload status
+- `sanitization_log`: Audit trail
+
+**Design Principles**:
+- ACID compliance
+- Indexed for performance (queries < 100ms)
+- Versioned migrations
+- Transaction-based updates
+
+### 4. Async Processing Layer
+
+**Purpose**: Process jobs without blocking
+
+**Components**:
+- **Job Queue**: Persistent, priority-based queue
+- **Workers**: Independent job processors
+- **Retry Logic**: Exponential backoff
+- **Error Handling**: Quarantine failed jobs
+
+**Job Types**:
+1. `sanitize_conversation`: Run sanitization pipeline
+2. `extract_learning`: Generate learnings
+3. `mine_upload`: Upload to network
+
+### 5. Learning Extraction Layer
+
+**Purpose**: Extract valuable, reusable learnings
+
+**Components**:
+- **Conversation Analyzer**: Determines if conversation has value
+- **Category Extractors**: Specialized by learning type
+- **Quality Scorer**: Assigns confidence scores
+- **Deduplication**: Prevents duplicate learnings
+
+**Learning Categories**:
+- `pattern`: Code patterns and architectures
+- `best_practice`: Recommended approaches
+- `anti_pattern`: Things to avoid
+- `bug_fix`: Problem-solving strategies
+- `optimization`: Performance improvements
+- `tool_usage`: How to use tools/libraries
+- `workflow`: Development workflows
+- `decision`: Architecture decisions
+
+**Quality Requirements**:
+- Confidence score ≥ 0.6
+- Content length ≥ 100 characters
+- Well-categorized with tags
+- Not trivial or generic
+
+### 6. Query Interface (MCP Server)
+
+**Purpose**: Enable agents to query learnings
+
+**Protocol**: Model Context Protocol (MCP)
+
+**Tools**:
+- `search_learnings`: Query by text, category, tags
+- `get_learning_by_id`: Retrieve specific learning
+- `get_learning_context`: Full conversation for learning
+
+**Resources**:
+- `context://learnings/recent`: Latest learnings
+- `context://learnings/top-rated`: Highest confidence
+- `context://stats`: Network statistics
+
+**Performance**: All queries < 200ms
+
+### 7. Network Layer
+
+**Purpose**: Share learnings globally with rewards
+
+**Components**:
+- **IPFS Client**: Decentralized storage
+- **Blockchain Integration**: Transaction handling
+- **Token System**: Reward calculation
+- **Validator Network**: Quality validation (future)
+
+**Upload Process**:
+1. Learning queued for upload
+2. Content uploaded to IPFS → CID generated
+3. Blockchain transaction with CID
+4. Token reward calculated
+5. Status tracked in uploads table
+
+## Data Flow
+
+### Happy Path: Conversation → Global Network
+
+```
+1. User interacts with Claude Code
+   ↓
+2. Hooks capture UserPromptSubmit + Stop events
+   ↓
+3. Events queued (< 100ms, non-blocking)
+   ↓
+4. Async worker picks up sanitization job
+   ↓
+5. Sanitization pipeline removes ALL PII
+   ↓
+6. Sanitized data stored in SQLite
+   ↓
+7. Learning extraction job queued
+   ↓
+8. Async worker extracts learnings
+   ↓
+9. Quality filter scores and filters learnings
+   ↓
+10. High-quality learnings queued for upload
+   ↓
+11. Mining worker uploads to IPFS
+   ↓
+12. Blockchain transaction records upload
+   ↓
+13. Token reward distributed
+   ↓
+14. Other agents query via MCP server
+```
+
+## Privacy Guarantees
+
+### Zero-Trust PII Handling
+
+**Rule 1**: Never store unsanitized data
+**Rule 2**: Sanitize before database insertion
+**Rule 3**: Audit all redactions
+**Rule 4**: User control over uploads
+
+### Sanitization Validation
+
+**Rule-Based Layer** (Fast, Deterministic):
+- Regex patterns for known PII formats
+- < 1% false positive rate
+- Processing time < 10ms
+
+**AI Layer** (Accurate, Context-Aware):
+- LLM-based context analysis
+- Distinguishes names from variables
+- Handles company-specific terminology
+- < 5% false negative rate
+
+**Hybrid Validation**:
+- Rules catch obvious cases quickly
+- AI validates and enhances
+- Combined result sanitized
+- Audit log tracks all detections
+
+## Performance Requirements
+
+| Component | Requirement | Rationale |
+|-----------|-------------|-----------|
+| Hook Execution | < 100ms | Never block user |
+| Event Queueing | < 50ms | Fast persistence |
+| Sanitization | < 2s per conversation | Acceptable async delay |
+| Database Queries | < 100ms | Responsive queries |
+| MCP Queries | < 200ms | Agent experience |
+| Learning Extraction | < 5s per conversation | Background processing |
+
+## Scalability Considerations
+
+### Current (MVP)
+- Single SQLite database
+- Local processing
+- File-based queue
+
+### Future Scaling
+- PostgreSQL for multi-user
+- Distributed job queue (Redis)
+- Horizontal worker scaling
+- CDN for IPFS content
+- Sharded blockchain integration
+
+## Security Model
+
+### Threat Model
+
+**Threats Addressed**:
+1. PII Leakage → Sanitization before storage
+2. Unauthorized Access → Local-first architecture
+3. Data Corruption → ACID transactions
+4. Injection Attacks → Parameterized queries
+5. Secret Exposure → Hook-level filtering
+
+**Future Threats**:
+1. Network Byzantine actors → Validator consensus
+2. Spam/Junk learnings → Quality scoring + validation
+3. Sybil attacks → Identity verification
+4. Reward manipulation → Multi-validator consensus
+
+### Access Control
+
+**MVP**: Local-only access (single user)
+
+**Future**:
+- Multi-user authentication
+- Role-based access control
+- API key management for MCP
+- Encrypted storage option
+
+## Technology Stack
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Runtime | Node.js + TypeScript | Type safety, async-first |
+| Database | SQLite | Simple, embedded, ACID |
+| Testing | Vitest | Fast, modern, TypeScript-first |
+| Sanitization | Regex + Claude API | Hybrid approach |
+| MCP Server | @modelcontextprotocol/sdk | Standard protocol |
+| Blockchain | TBD (Ethereum/Celestia) | EVM compatibility |
+| Storage | IPFS | Decentralized, content-addressed |
+| Queue | SQLite-based | Simple, persistent |
+
+## Error Handling
+
+### Graceful Degradation
+
+**Hooks Fail**: Log error, don't block user
+**Sanitization Fails**: Quarantine conversation, alert
+**Learning Extraction Fails**: Mark for manual review
+**Upload Fails**: Retry with exponential backoff
+**MCP Query Fails**: Return empty with error message
+
+### Recovery Strategies
+
+1. **Job Retries**: Max 3 attempts with backoff
+2. **Dead Letter Queue**: Failed jobs for analysis
+3. **Manual Review**: Quarantine for complex cases
+4. **Rollback**: Database migrations reversible
+5. **Audit Trail**: Full logging for debugging
+
+## Testing Strategy
+
+### Test Pyramid
+
+- **70% Unit Tests**: Isolated component testing
+- **20% Integration Tests**: Component interactions
+- **10% E2E Tests**: Full system workflows
+
+### Critical Test Coverage
+
+1. **Sanitization**: Zero PII leaks in 1000+ test cases
+2. **Hooks**: Non-blocking, error handling
+3. **Queue**: No job loss, proper ordering
+4. **Database**: ACID compliance, concurrency
+5. **MCP**: Protocol compliance, performance
+
+### Claude-Powered Testing Harness
+
+Uses Claude Agent SDK to:
+- Generate comprehensive test suites
+- Validate test quality
+- Verify implementations
+- Enforce quality gates
+
+## Deployment Architecture
+
+### MVP (Local Development)
+```
+User Machine:
+  - Claude Code with hooks
+  - SQLite database
+  - Background workers
+  - MCP server (local)
+```
+
+### Production (Future)
+```
+User Machines:
+  - Claude Code with hooks
+  - Local SQLite cache
+  - MCP client
+
+Cloud Infrastructure:
+  - PostgreSQL cluster
+  - Worker pool (auto-scaling)
+  - MCP server (HA)
+  - IPFS node/gateway
+  - Blockchain node
+```
+
+## Integration Points
+
+### Claude Code Hooks
+- Configuration via `hooks.json`
+- Scripts in `.claude/hooks/`
+- Environment variables for paths
+
+### MCP Protocol
+- Standard MCP server implementation
+- Claude Code auto-discovery
+- Tool and resource definitions
+
+### Blockchain
+- Smart contract for rewards
+- Event listening for confirmations
+- Wallet integration for payouts
+
+### IPFS
+- Content upload via API
+- CID generation and tracking
+- Gateway for content retrieval
+
+## Monitoring & Observability
+
+### Key Metrics
+
+**Performance**:
+- Hook execution time
+- Sanitization duration
+- Query response time
+- Job processing rate
+
+**Quality**:
+- PII detection rate
+- Learning confidence scores
+- Test coverage percentage
+- Quality gate pass rate
+
+**Business**:
+- Conversations captured
+- Learnings extracted
+- Network uploads
+- Token rewards distributed
+
+### Logging Strategy
+
+1. **Structured Logging**: JSON format
+2. **Log Levels**: DEBUG, INFO, WARN, ERROR
+3. **Correlation IDs**: Track conversation flow
+4. **Audit Trail**: All PII redactions
+5. **Performance Metrics**: Timing for all operations
+
+## Related Documents
+
+### Architecture
+- [Subagent System](./architecture-subagent-system-2025-01-16.md)
+- [Testing Harness](./architecture-testing-harness-2025-01-16.md)
+- [Sanitization Pipeline](./architecture-sanitization-pipeline-2025-01-16.md)
+- [Database Schema](./architecture-database-schema-2025-01-16.md)
+
+### Decisions
+- [ADR: Use Claude Hooks](../decisions/decision-use-claude-hooks-2025-01-16.md)
+- [ADR: Sanitize Before Storage](../decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [ADR: Subagent-Driven Development](../decisions/decision-subagent-driven-development-2025-01-16.md)
+
+### Plans
+- [Implementation Roadmap](../plans/plan-implementation-roadmap-2025-01-16.md)
+- [Original User Vision](../plans/plan-original-user-vision-2025-01-16.md)
+
+### Reference
+- [Database Schema Reference](../reference/reference-database-schema-2025-01-16.md)
+- [Testing Strategy](../reference/reference-testing-strategy-2025-01-16.md)
+</file>
+
+<file path="docs/architecture/architecture-learning-extraction-2025-01-16.md">
+# Learning Extraction Architecture
+
+> Automated system for extracting valuable, actionable learnings from sanitized conversations using AI-powered analysis and quality validation
+
+---
+title: Learning Extraction Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [learning-extraction, ai, quality-scoring, deduplication, evidence]
+---
+
+## Overview
+
+The Learning Extraction system analyzes sanitized conversations to identify and extract valuable, reusable learnings. It transforms raw conversation data into structured knowledge that can be shared across the Global Context Network, enabling AI agents to learn from each other's experiences.
+
+**Core Value Proposition**: Mine actionable knowledge from conversations, not just capture transcripts.
+
+### Alignment with Standards
+
+This architecture is 100% compliant with [STANDARDS.md](../STANDARDS.md):
+- Uses `learnings` table with ULID IDs
+- Processes via `job_queue` with canonical status enums
+- Operates on SANITIZED data only (never raw)
+- Async processing with quality gates
+- Evidence-based (links to source messages)
+
+## Goals
+
+- Extract high-value learnings from 20-30% of conversations
+- Quality threshold: confidence score ≥ 0.6
+- Deduplication: Prevent similar learnings from being stored
+- Evidence linkage: Every learning traceable to source messages
+- Performance: < 5s per conversation (p95)
+- Categorization: Automatic classification into 8 learning types
+
+## Non-Goals
+
+- Capturing every conversation (most lack valuable learnings)
+- Real-time extraction (async processing is acceptable)
+- Perfect recall (precision > recall for quality)
+- General summarization (focus on actionable insights)
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Sanitized Messages                         │
+│                   (SQLite: messages table)                    │
+└────────────────┬─────────────────────────────────────────────┘
+                 │
+                 ▼ Trigger: conversation marked complete
+      ┌──────────────────────────────────┐
+      │      Job Queue (job_queue)        │
+      │  Type: extract_learning           │
+      │  Status: queued                   │
+      └────────────┬─────────────────────┘
+                   │
+                   ▼ Worker picks up job
+      ┌──────────────────────────────────┐
+      │  Conversation Value Analyzer      │
+      │  ┌────────────────────────────┐  │
+      │  │ - Check length (≥3 messages)│  │
+      │  │ - Check topics (coding?)    │  │
+      │  │ - Check tools used          │  │
+      │  │ - Estimate value score      │  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ├─── Low Value (< 0.3) ──> Skip (mark complete)
+                   │
+                   ▼ High Value (≥ 0.3)
+      ┌──────────────────────────────────┐
+      │   Category Detection              │
+      │  ┌────────────────────────────┐  │
+      │  │ Classify conversation into: │  │
+      │  │ - pattern                   │  │
+      │  │ - best_practice             │  │
+      │  │ - anti_pattern              │  │
+      │  │ - bug_fix                   │  │
+      │  │ - optimization              │  │
+      │  │ - tool_usage                │  │
+      │  │ - workflow                  │  │
+      │  │ - decision                  │  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ▼ For each detected category
+      ┌──────────────────────────────────┐
+      │  Category-Specific Extractors     │
+      │  ┌────────────────────────────┐  │
+      │  │ Pattern Extractor          │  │
+      │  │ Best Practice Extractor    │  │
+      │  │ Anti-Pattern Extractor     │  │
+      │  │ Bug Fix Extractor          │  │
+      │  │ Optimization Extractor     │  │
+      │  │ Tool Usage Extractor       │  │
+      │  │ Workflow Extractor         │  │
+      │  │ Decision Extractor         │  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ▼ Raw learnings extracted
+      ┌──────────────────────────────────┐
+      │   Quality Scoring System          │
+      │  ┌────────────────────────────┐  │
+      │  │ - Actionability (0-1)      │  │
+      │  │ - Generalizability (0-1)   │  │
+      │  │ - Clarity (0-1)            │  │
+      │  │ - Evidence strength (0-1)  │  │
+      │  │ → Confidence = weighted avg│  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ├─── Low Confidence (< 0.6) ──> Discard
+                   │
+                   ▼ High Confidence (≥ 0.6)
+      ┌──────────────────────────────────┐
+      │   Deduplication Check             │
+      │  ┌────────────────────────────┐  │
+      │  │ 1. Embedding similarity     │  │
+      │  │    (cosine > 0.85 = dup)    │  │
+      │  │ 2. SimHash comparison       │  │
+      │  │    (Hamming < 3 = dup)      │  │
+      │  │ 3. Key phrase overlap       │  │
+      │  │    (>80% = dup)             │  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ├─── Duplicate Found ──> Merge or Skip
+                   │
+                   ▼ Unique Learning
+      ┌──────────────────────────────────┐
+      │   Evidence Linkage                │
+      │  ┌────────────────────────────┐  │
+      │  │ - Link to source messages   │  │
+      │  │ - Extract key quotes        │  │
+      │  │ - Reference tool calls      │  │
+      │  │ - Store context metadata    │  │
+      │  └─────────┬──────────────────┘  │
+      └────────────┼─────────────────────┘
+                   │
+                   ▼ Store in database
+      ┌──────────────────────────────────┐
+      │   Learnings Table (SQLite)        │
+      │  ┌────────────────────────────┐  │
+      │  │ - id (ULID)                 │  │
+      │  │ - conversation_id           │  │
+      │  │ - category                  │  │
+      │  │ - title, content            │  │
+      │  │ - confidence, tags          │  │
+      │  │ - evidence (message_ids)    │  │
+      │  │ - created_at (ISO-8601)     │  │
+      │  └────────────────────────────┘  │
+      └──────────────────────────────────┘
+                   │
+                   ▼ Available for query
+      ┌──────────────────────────────────┐
+      │   MCP Server (Query Interface)    │
+      │   + Future: Upload to Network     │
+      └──────────────────────────────────┘
+```
+
+## Component Specifications
+
+### 1. Conversation Value Analyzer
+
+**Purpose**: Determine if a conversation is worth extracting learnings from
+
+**Input**: Conversation metadata from `conversations` and `messages` tables
+
+**Output**: Value score (0-1) and decision (process / skip)
+
+**Heuristics**:
+```typescript
+interface ValueAnalysis {
+  score: number;           // 0-1 composite score
+  reasons: string[];       // Why this score
+  shouldProcess: boolean;  // score >= 0.3
+}
+
+async function analyzeConversationValue(
+  conversationId: string
+): Promise<ValueAnalysis> {
+  const conversation = await getConversation(conversationId);
+  const messages = await getMessages(conversationId);
+
+  let score = 0;
+  const reasons: string[] = [];
+
+  // Heuristic 1: Message count (min 3 for context)
+  if (messages.length < 3) {
+    return { score: 0, reasons: ['Too few messages'], shouldProcess: false };
+  }
+
+  // Heuristic 2: Contains code blocks (strong signal)
+  const codeBlockCount = messages.filter(m =>
+    m.content.includes('```')
+  ).length;
+  if (codeBlockCount >= 2) {
+    score += 0.3;
+    reasons.push('Contains code examples');
+  }
+
+  // Heuristic 3: Tool usage (file edits, searches)
+  const toolCallCount = messages.filter(m =>
+    m.tool_calls && m.tool_calls.length > 0
+  ).length;
+  if (toolCallCount >= 3) {
+    score += 0.25;
+    reasons.push('Substantial tool usage');
+  }
+
+  // Heuristic 4: Conversation length (complexity proxy)
+  const totalTokens = estimateTokens(messages);
+  if (totalTokens >= 2000) {
+    score += 0.2;
+    reasons.push('Substantial conversation');
+  }
+
+  // Heuristic 5: Technical keywords
+  const technicalKeywords = [
+    'error', 'bug', 'fix', 'implement', 'optimize',
+    'pattern', 'architecture', 'design', 'test'
+  ];
+  const keywordMatches = messages.filter(m =>
+    technicalKeywords.some(kw => m.content.toLowerCase().includes(kw))
+  ).length;
+  if (keywordMatches >= 2) {
+    score += 0.25;
+    reasons.push('Technical problem-solving detected');
+  }
+
+  return {
+    score: Math.min(score, 1.0),
+    reasons,
+    shouldProcess: score >= 0.3
+  };
+}
+```
+
+**Performance**: < 100ms (simple heuristics, no AI call)
+
+---
+
+### 2. Category Detection
+
+**Purpose**: Classify conversation into one or more learning categories
+
+**Input**: Sanitized conversation messages
+
+**Output**: List of detected categories with confidence
+
+**Categories** (from STANDARDS.md):
+1. `pattern`: Code patterns and architectural approaches
+2. `best_practice`: Recommended ways to do things
+3. `anti_pattern`: Things to avoid
+4. `bug_fix`: Problem-solving strategies
+5. `optimization`: Performance improvements
+6. `tool_usage`: How to use specific tools/libraries
+7. `workflow`: Development workflows and processes
+8. `decision`: Architecture decisions and trade-offs
+
+**Implementation**:
+```typescript
+interface CategoryDetection {
+  category: LearningCategory;
+  confidence: number;     // 0-1
+  signals: string[];      // Why detected
+}
+
+async function detectCategories(
+  conversationId: string
+): Promise<CategoryDetection[]> {
+  const messages = await getMessages(conversationId);
+  const conversationText = messages.map(m => m.content).join('\n\n');
+
+  // AI-powered classification
+  const prompt = `
+Analyze this technical conversation and identify learning categories present.
+
+CONVERSATION:
+${conversationText}
+
+CATEGORIES:
+- pattern: Reusable code patterns or architectural approaches
+- best_practice: Recommended ways to accomplish tasks
+- anti_pattern: Things to avoid or common mistakes
+- bug_fix: Debugging strategies or error resolutions
+- optimization: Performance improvements or efficiency gains
+- tool_usage: How to use specific tools, libraries, or frameworks
+- workflow: Development processes or workflows
+- decision: Architecture decisions with trade-offs
+
+OUTPUT (JSON):
+{
+  "categories": [
+    {
+      "category": "pattern",
+      "confidence": 0.85,
+      "signals": ["Uses factory pattern", "Implements dependency injection"]
+    }
+  ]
+}
+
+Only include categories with confidence >= 0.5.
+`;
+
+  const response = await callClaudeAPI({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 1000,
+    temperature: 0.3,  // Lower temp for consistency
+    messages: [{ role: 'user', content: prompt }]
+  });
+
+  const parsed = JSON.parse(response.content[0].text);
+  return parsed.categories.filter(c => c.confidence >= 0.5);
+}
+```
+
+**Performance**: < 2s (single AI call with streaming)
+
+**Caching**: Cache category detection per conversation_id
+
+---
+
+### 3. Category-Specific Extractors
+
+**Purpose**: Extract structured learning content for each category
+
+**Implementation Pattern**:
+```typescript
+interface LearningExtraction {
+  title: string;           // Concise title (≤100 chars)
+  content: string;         // Full learning description (≥100 chars)
+  tags: string[];          // Relevant tags (3-10)
+  evidence: string[];      // Message IDs that support this learning
+  confidence_factors: {
+    actionability: number;      // 0-1
+    generalizability: number;   // 0-1
+    clarity: number;            // 0-1
+    evidence_strength: number;  // 0-1
+  };
+}
+
+// Example: Pattern Extractor
+async function extractPattern(
+  conversationId: string
+): Promise<LearningExtraction> {
+  const messages = await getMessages(conversationId);
+  const conversationText = messages.map(m =>
+    `[${m.role}]: ${m.content}`
+  ).join('\n\n');
+
+  const prompt = `
+Extract a reusable code pattern from this conversation.
+
+CONVERSATION:
+${conversationText}
+
+EXTRACTION REQUIREMENTS:
+1. Title: Concise name for the pattern (e.g., "Factory Pattern for Plugin System")
+2. Content:
+   - WHAT the pattern is (1-2 sentences)
+   - WHY it's useful (benefits)
+   - WHEN to use it (use cases)
+   - HOW to implement it (key steps or code structure)
+   - Minimum 100 characters
+3. Tags: 3-10 relevant tags (e.g., ["factory-pattern", "dependency-injection", "typescript"])
+4. Evidence: Which parts of the conversation demonstrate this pattern? (quote message indices)
+
+QUALITY CRITERIA:
+- Actionability: Can someone apply this immediately? (0-1)
+- Generalizability: Useful beyond this specific case? (0-1)
+- Clarity: Is it clearly explained? (0-1)
+- Evidence Strength: Well-supported by conversation? (0-1)
+
+OUTPUT (JSON):
+{
+  "title": "...",
+  "content": "...",
+  "tags": ["...", "..."],
+  "evidence_message_indices": [0, 3, 5],
+  "confidence_factors": {
+    "actionability": 0.9,
+    "generalizability": 0.85,
+    "clarity": 0.8,
+    "evidence_strength": 0.9
+  }
+}
+`;
+
+  const response = await callClaudeAPI({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 2000,
+    temperature: 0.2,
+    messages: [{ role: 'user', content: prompt }]
+  });
+
+  const parsed = JSON.parse(response.content[0].text);
+
+  // Map message indices to message IDs
+  const evidenceMessageIds = parsed.evidence_message_indices.map(
+    idx => messages[idx]?.id
+  ).filter(Boolean);
+
+  return {
+    title: parsed.title,
+    content: parsed.content,
+    tags: parsed.tags,
+    evidence: evidenceMessageIds,
+    confidence_factors: parsed.confidence_factors
+  };
+}
+```
+
+**Extractor Variations**:
+
+Each category has a specialized extractor with tailored prompts:
+
+- **Best Practice Extractor**: Focus on "why this approach is recommended"
+- **Anti-Pattern Extractor**: Focus on "what problem this causes" and "better alternatives"
+- **Bug Fix Extractor**: Focus on "symptoms → root cause → solution"
+- **Optimization Extractor**: Focus on "before/after performance" and "trade-offs"
+- **Tool Usage Extractor**: Focus on "how to use X to accomplish Y"
+- **Workflow Extractor**: Focus on "step-by-step process"
+- **Decision Extractor**: Focus on "options considered → chosen option → rationale"
+
+**Performance**: < 3s per extractor (p95)
+
+---
+
+### 4. Quality Scoring System
+
+**Purpose**: Calculate confidence score to filter low-quality learnings
+
+**Formula**:
+```typescript
+function calculateConfidence(factors: ConfidenceFactors): number {
+  // Weighted average (weights sum to 1.0)
+  const weights = {
+    actionability: 0.35,      // Most important: can you use it?
+    generalizability: 0.30,   // Second: broadly applicable?
+    clarity: 0.20,            // Third: well-explained?
+    evidence_strength: 0.15   // Fourth: well-supported?
+  };
+
+  const confidence =
+    factors.actionability * weights.actionability +
+    factors.generalizability * weights.generalizability +
+    factors.clarity * weights.clarity +
+    factors.evidence_strength * weights.evidence_strength;
+
+  return Math.round(confidence * 100) / 100; // Round to 2 decimals
+}
+
+// Quality threshold (from STANDARDS.md)
+const MIN_CONFIDENCE = 0.6;
+
+function meetsQualityThreshold(confidence: number): boolean {
+  return confidence >= MIN_CONFIDENCE;
+}
+```
+
+**Factor Definitions**:
+
+1. **Actionability** (0-1):
+   - 1.0: Step-by-step instructions or clear code example
+   - 0.7: General guidance with concrete suggestions
+   - 0.4: Vague recommendations without specifics
+   - 0.0: Purely theoretical with no practical application
+
+2. **Generalizability** (0-1):
+   - 1.0: Applies to many projects/languages/contexts
+   - 0.7: Applies to specific domain but broadly useful
+   - 0.4: Very project-specific
+   - 0.0: Only relevant to one specific case
+
+3. **Clarity** (0-1):
+   - 1.0: Crystal clear, no ambiguity
+   - 0.7: Mostly clear with minor gaps
+   - 0.4: Confusing or requires significant interpretation
+   - 0.0: Incomprehensible
+
+4. **Evidence Strength** (0-1):
+   - 1.0: Multiple concrete examples from conversation
+   - 0.7: One good example with supporting context
+   - 0.4: Weak connection to conversation
+   - 0.0: No evidence in conversation
+
+---
+
+### 5. Deduplication Strategy
+
+**Purpose**: Prevent storing near-duplicate learnings
+
+**Three-Layer Approach**:
+
+#### Layer 1: Embedding Similarity (Primary)
+```typescript
+async function checkEmbeddingSimilarity(
+  newLearning: LearningExtraction,
+  existingLearnings: Learning[]
+): Promise<DuplicateMatch | null> {
+  // Generate embedding for new learning
+  const newEmbedding = await generateEmbedding(
+    newLearning.title + '\n' + newLearning.content
+  );
+
+  // Compare with existing learnings
+  for (const existing of existingLearnings) {
+    if (existing.category !== newLearning.category) continue; // Same category only
+
+    const existingEmbedding = await getOrGenerateEmbedding(existing.id);
+    const similarity = cosineSimilarity(newEmbedding, existingEmbedding);
+
+    if (similarity > 0.85) {
+      return {
+        type: 'embedding',
+        matchId: existing.id,
+        similarity,
+        action: similarity > 0.95 ? 'skip' : 'merge'
+      };
+    }
+  }
+
+  return null;
+}
+
+// Use Claude Embeddings API or local model
+async function generateEmbedding(text: string): Promise<number[]> {
+  // Option A: Claude Embeddings (when available)
+  // Option B: Local sentence-transformers model
+  // For MVP: Use simple TF-IDF as fallback
+  return tfidfVector(text);
+}
+```
+
+#### Layer 2: SimHash (Fast Approximate)
+```typescript
+function checkSimHashSimilarity(
+  newLearning: LearningExtraction,
+  existingLearnings: Learning[]
+): DuplicateMatch | null {
+  const newHash = simhash(newLearning.content);
+
+  for (const existing of existingLearnings) {
+    if (existing.category !== newLearning.category) continue;
+
+    const existingHash = simhash(existing.content);
+    const hammingDistance = hammingDistance(newHash, existingHash);
+
+    // Hamming distance < 3 indicates very similar
+    if (hammingDistance < 3) {
+      return {
+        type: 'simhash',
+        matchId: existing.id,
+        distance: hammingDistance,
+        action: 'review'
+      };
+    }
+  }
+
+  return null;
+}
+
+// SimHash implementation (locality-sensitive hashing)
+function simhash(text: string): bigint {
+  const tokens = tokenize(text);
+  const features = new Map<string, number>();
+
+  // TF-IDF weighting
+  for (const token of tokens) {
+    features.set(token, (features.get(token) || 0) + 1);
+  }
+
+  // Hash each feature
+  const V = new Array(64).fill(0);
+  for (const [feature, weight] of features) {
+    const hash = hashCode(feature);
+    for (let i = 0; i < 64; i++) {
+      if ((hash >> i) & 1) {
+        V[i] += weight;
+      } else {
+        V[i] -= weight;
+      }
+    }
+  }
+
+  // Generate fingerprint
+  let fingerprint = 0n;
+  for (let i = 0; i < 64; i++) {
+    if (V[i] > 0) {
+      fingerprint |= (1n << BigInt(i));
+    }
+  }
+
+  return fingerprint;
+}
+```
+
+#### Layer 3: Key Phrase Overlap (Fallback)
+```typescript
+function checkKeyPhraseOverlap(
+  newLearning: LearningExtraction,
+  existingLearnings: Learning[]
+): DuplicateMatch | null {
+  const newPhrases = extractKeyPhrases(newLearning.content);
+
+  for (const existing of existingLearnings) {
+    if (existing.category !== newLearning.category) continue;
+
+    const existingPhrases = extractKeyPhrases(existing.content);
+    const overlap = jaccardSimilarity(newPhrases, existingPhrases);
+
+    if (overlap > 0.8) {
+      return {
+        type: 'phrase',
+        matchId: existing.id,
+        overlap,
+        action: 'review'
+      };
+    }
+  }
+
+  return null;
+}
+
+function extractKeyPhrases(text: string): Set<string> {
+  // Extract 2-3 word phrases (bigrams/trigrams)
+  const tokens = tokenize(text.toLowerCase());
+  const phrases = new Set<string>();
+
+  for (let i = 0; i < tokens.length - 1; i++) {
+    phrases.add(`${tokens[i]} ${tokens[i+1]}`);
+    if (i < tokens.length - 2) {
+      phrases.add(`${tokens[i]} ${tokens[i+1]} ${tokens[i+2]}`);
+    }
+  }
+
+  return phrases;
+}
+```
+
+**Deduplication Decision Logic**:
+```typescript
+async function deduplicateCheck(
+  newLearning: LearningExtraction
+): Promise<DeduplicationResult> {
+  // Get existing learnings in same category
+  const existingLearnings = await db.prepare(`
+    SELECT * FROM learnings
+    WHERE category = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `).all(newLearning.category);
+
+  // Try all three methods
+  const embeddingMatch = await checkEmbeddingSimilarity(newLearning, existingLearnings);
+  if (embeddingMatch?.action === 'skip') {
+    return { isDuplicate: true, reason: 'High embedding similarity', matchId: embeddingMatch.matchId };
+  }
+
+  const simhashMatch = checkSimHashSimilarity(newLearning, existingLearnings);
+  if (simhashMatch) {
+    return { isDuplicate: true, reason: 'SimHash match', matchId: simhashMatch.matchId };
+  }
+
+  const phraseMatch = checkKeyPhraseOverlap(newLearning, existingLearnings);
+  if (phraseMatch) {
+    return { isDuplicate: true, reason: 'High phrase overlap', matchId: phraseMatch.matchId };
+  }
+
+  return { isDuplicate: false };
+}
+```
+
+---
+
+### 6. Evidence Linkage
+
+**Purpose**: Make every learning traceable to source messages
+
+**Implementation**:
+```typescript
+interface Evidence {
+  message_ids: string[];     // ULIDs of source messages
+  quotes: Quote[];           // Key quotes from conversation
+  context_summary: string;   // Brief context description
+}
+
+interface Quote {
+  message_id: string;
+  text: string;              // Extracted quote (≤200 chars)
+  role: 'user' | 'assistant';
+}
+
+async function buildEvidence(
+  extractedLearning: LearningExtraction,
+  conversationId: string
+): Promise<Evidence> {
+  const messages = await getMessages(conversationId);
+
+  // Get messages referenced in extraction
+  const evidenceMessages = messages.filter(m =>
+    extractedLearning.evidence.includes(m.id)
+  );
+
+  // Extract key quotes using AI
+  const quotesPrompt = `
+From these messages, extract 2-4 key quotes (≤200 chars each) that best support this learning.
+
+LEARNING:
+${extractedLearning.title}
+${extractedLearning.content}
+
+MESSAGES:
+${evidenceMessages.map((m, i) => `[${i}] ${m.role}: ${m.content}`).join('\n\n')}
+
+OUTPUT (JSON):
+{
+  "quotes": [
+    {"message_index": 0, "text": "..."},
+    {"message_index": 2, "text": "..."}
+  ],
+  "context_summary": "User was implementing X and encountered Y..."
+}
+`;
+
+  const response = await callClaudeAPI({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 500,
+    temperature: 0.2,
+    messages: [{ role: 'user', content: quotesPrompt }]
+  });
+
+  const parsed = JSON.parse(response.content[0].text);
+
+  // Map indices to message IDs
+  const quotes = parsed.quotes.map(q => ({
+    message_id: evidenceMessages[q.message_index].id,
+    text: q.text,
+    role: evidenceMessages[q.message_index].role
+  }));
+
+  return {
+    message_ids: extractedLearning.evidence,
+    quotes,
+    context_summary: parsed.context_summary
+  };
+}
+```
+
+**Storage in Database**:
+```sql
+-- learnings table (from STANDARDS.md)
+CREATE TABLE learnings (
+  id TEXT PRIMARY KEY,              -- ULID
+  conversation_id TEXT NOT NULL,
+  category TEXT NOT NULL,           -- enum: pattern, best_practice, etc.
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  tags TEXT NOT NULL,               -- JSON array
+  confidence REAL NOT NULL,         -- 0.0 to 1.0
+  evidence TEXT NOT NULL,           -- JSON: {message_ids, quotes, context_summary}
+  created_at TEXT NOT NULL,         -- ISO-8601
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+  CHECK(category IN ('pattern', 'best_practice', 'anti_pattern', 'bug_fix',
+                     'optimization', 'tool_usage', 'workflow', 'decision')),
+  CHECK(confidence >= 0.0 AND confidence <= 1.0),
+  CHECK(length(content) >= 100)
+);
+
+CREATE INDEX idx_learnings_category ON learnings(category, confidence DESC);
+CREATE INDEX idx_learnings_conversation ON learnings(conversation_id);
+CREATE INDEX idx_learnings_created ON learnings(created_at DESC);
+
+-- Full-text search (from STANDARDS.md)
+CREATE VIRTUAL TABLE learnings_fts USING fts5(
+  title, content, tags,
+  content=learnings,
+  content_rowid=id
+);
+```
+
+---
+
+## Data Flow
+
+### Complete Extraction Pipeline
+
+```typescript
+async function extractLearningsFromConversation(
+  conversationId: string
+): Promise<void> {
+  // Step 1: Value analysis
+  const valueAnalysis = await analyzeConversationValue(conversationId);
+  if (!valueAnalysis.shouldProcess) {
+    await markJobComplete(conversationId, 'low_value', valueAnalysis.reasons);
+    return;
+  }
+
+  // Step 2: Category detection
+  const categories = await detectCategories(conversationId);
+  if (categories.length === 0) {
+    await markJobComplete(conversationId, 'no_categories', []);
+    return;
+  }
+
+  // Step 3: Extract learnings for each category
+  const extractions: LearningExtraction[] = [];
+  for (const categoryDetection of categories) {
+    const extractor = getExtractorForCategory(categoryDetection.category);
+    const extraction = await extractor(conversationId);
+    extractions.push(extraction);
+  }
+
+  // Step 4: Quality filtering
+  const qualityLearnings = extractions.filter(ext => {
+    const confidence = calculateConfidence(ext.confidence_factors);
+    return confidence >= MIN_CONFIDENCE;
+  });
+
+  if (qualityLearnings.length === 0) {
+    await markJobComplete(conversationId, 'low_quality', []);
+    return;
+  }
+
+  // Step 5: Deduplication
+  const uniqueLearnings: LearningExtraction[] = [];
+  for (const learning of qualityLearnings) {
+    const dupCheck = await deduplicateCheck(learning);
+    if (!dupCheck.isDuplicate) {
+      uniqueLearnings.push(learning);
+    } else {
+      logger.info('Duplicate learning detected', {
+        title: learning.title,
+        reason: dupCheck.reason,
+        matchId: dupCheck.matchId
+      });
+    }
+  }
+
+  // Step 6: Build evidence and store
+  for (const learning of uniqueLearnings) {
+    const evidence = await buildEvidence(learning, conversationId);
+    const confidence = calculateConfidence(learning.confidence_factors);
+
+    await storeLearning({
+      id: ulid(),
+      conversation_id: conversationId,
+      category: learning.category,
+      title: learning.title,
+      content: learning.content,
+      tags: JSON.stringify(learning.tags),
+      confidence,
+      evidence: JSON.stringify(evidence),
+      created_at: new Date().toISOString()
+    });
+  }
+
+  await markJobComplete(conversationId, 'success', [
+    `Extracted ${uniqueLearnings.length} learnings`
+  ]);
+}
+```
+
+---
+
+## AI Prompt Templates
+
+### Template Structure
+
+All AI prompts follow this structure:
+1. **Context**: What we're trying to accomplish
+2. **Input**: The conversation data
+3. **Requirements**: What the output must contain
+4. **Quality Criteria**: How to judge quality
+5. **Output Format**: Exact JSON schema
+
+### Prompt Configuration
+
+```typescript
+interface PromptConfig {
+  model: 'claude-3-5-sonnet-20241022';
+  max_tokens: number;
+  temperature: number;        // 0.2-0.3 for consistency
+  system?: string;            // Optional system prompt
+}
+
+const EXTRACTION_PROMPT_CONFIG: PromptConfig = {
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 2000,
+  temperature: 0.2
+};
+
+const CATEGORY_DETECTION_CONFIG: PromptConfig = {
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1000,
+  temperature: 0.3
+};
+```
+
+### Error Handling for AI Calls
+
+```typescript
+async function callClaudeAPI(config: PromptConfig & { messages: Message[] }): Promise<Response> {
+  const maxRetries = 3;
+  let lastError: Error;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await anthropic.messages.create(config);
+      return response;
+    } catch (error) {
+      lastError = error;
+
+      if (error.status === 429) {
+        // Rate limit - exponential backoff
+        await sleep(2 ** attempt * 1000);
+        continue;
+      } else if (error.status >= 500) {
+        // Server error - retry
+        await sleep(1000 * attempt);
+        continue;
+      } else {
+        // Client error - don't retry
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`API call failed after ${maxRetries} attempts: ${lastError.message}`);
+}
+```
+
+---
+
+## Performance Budget
+
+| Operation | Budget (p95) | Notes |
+|-----------|--------------|-------|
+| Value Analysis | < 100ms | No AI, pure heuristics |
+| Category Detection | < 2s | Single AI call |
+| Single Extraction | < 3s | AI call per category |
+| Quality Scoring | < 10ms | Pure calculation |
+| Deduplication Check | < 500ms | Embeddings + hashing |
+| Evidence Building | < 1s | Small AI call |
+| **Total Pipeline** | **< 5s** | For 1-2 learnings per conversation |
+
+**Cost Budget** (Claude API):
+- Input: ~3000 tokens per conversation (context)
+- Output: ~500 tokens per learning
+- Estimated cost: $0.01-0.02 per conversation processed
+
+---
+
+## Integration with Job Queue
+
+### Job Creation
+
+```typescript
+// Triggered when conversation is marked complete
+async function onConversationComplete(conversationId: string): Promise<void> {
+  await db.prepare(`
+    INSERT INTO job_queue (
+      id, type, payload, status, priority, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    ulid(),
+    'extract_learning',
+    JSON.stringify({ conversation_id: conversationId }),
+    'queued',
+    5, // Normal priority
+    new Date().toISOString()
+  );
+}
+```
+
+### Worker Implementation
+
+```typescript
+// Worker picks up jobs from queue
+async function processLearningExtractionJob(job: Job): Promise<void> {
+  const { conversation_id } = JSON.parse(job.payload);
+
+  try {
+    // Update job status
+    await updateJobStatus(job.id, 'in_progress');
+
+    // Run extraction pipeline
+    await extractLearningsFromConversation(conversation_id);
+
+    // Mark complete
+    await updateJobStatus(job.id, 'completed');
+
+  } catch (error) {
+    logger.error('Learning extraction failed', {
+      job_id: job.id,
+      conversation_id,
+      error
+    });
+
+    // Retry logic
+    if (job.attempts < 3) {
+      await updateJobStatus(job.id, 'failed'); // Will be retried
+    } else {
+      await updateJobStatus(job.id, 'dead_letter'); // Permanent failure
+    }
+  }
+}
+```
+
+---
+
+## Quality Assurance
+
+### Testing Strategy
+
+1. **Unit Tests** (70%):
+   - Value analysis heuristics
+   - Confidence calculation
+   - Deduplication algorithms
+   - Evidence linkage
+
+2. **Integration Tests** (20%):
+   - Full extraction pipeline
+   - AI prompt/response handling
+   - Database operations
+
+3. **E2E Tests** (10%):
+   - Real conversation → extracted learnings
+   - Quality thresholds enforced
+   - No duplicates stored
+
+### Test Fixtures
+
+```typescript
+// Gold standard conversations with expected learnings
+const TEST_CONVERSATIONS = [
+  {
+    id: 'conv_pattern_example',
+    messages: [...],
+    expectedLearnings: [
+      {
+        category: 'pattern',
+        title: 'Factory Pattern for Plugin System',
+        confidence: '>= 0.8',
+        mustContainKeywords: ['factory', 'plugin', 'dependency']
+      }
+    ]
+  },
+  // ... more examples
+];
+
+// Test extraction quality
+for (const testCase of TEST_CONVERSATIONS) {
+  const learnings = await extractLearningsFromConversation(testCase.id);
+
+  expect(learnings.length).toBe(testCase.expectedLearnings.length);
+
+  for (let i = 0; i < learnings.length; i++) {
+    const actual = learnings[i];
+    const expected = testCase.expectedLearnings[i];
+
+    expect(actual.category).toBe(expected.category);
+    expect(actual.confidence).toBeGreaterThanOrEqual(expected.confidence);
+    expect(actual.content).toContain(expected.mustContainKeywords);
+  }
+}
+```
+
+---
+
+## Monitoring & Metrics
+
+### Key Metrics
+
+```typescript
+// Track extraction performance
+metrics.timing('learning_extraction.duration', duration);
+metrics.increment('learning_extraction.success');
+metrics.increment('learning_extraction.skipped_low_value');
+metrics.increment('learning_extraction.duplicate_detected');
+
+// Track quality
+metrics.gauge('learning_extraction.avg_confidence', avgConfidence);
+metrics.histogram('learning_extraction.learnings_per_conversation', count);
+
+// Track categories
+for (const category of CATEGORIES) {
+  metrics.increment(`learning_extraction.category.${category}`);
+}
+```
+
+### Success Criteria
+
+- **Extraction Rate**: 20-30% of conversations yield ≥1 learning
+- **Quality**: Average confidence ≥ 0.75
+- **Deduplication**: < 5% duplicates stored
+- **Performance**: p95 < 5s per conversation
+- **Evidence**: 100% of learnings have ≥1 linked message
+
+---
+
+## Future Enhancements
+
+### Phase 1 (MVP)
+- ✅ Basic category detection
+- ✅ Quality scoring
+- ✅ Simple deduplication (SimHash)
+- ✅ Evidence linkage
+
+### Phase 2 (Post-MVP)
+- [ ] Multi-conversation pattern detection (aggregate learnings)
+- [ ] User feedback loop (thumbs up/down on learnings)
+- [ ] A/B testing on prompt variations
+- [ ] Learning versioning (improve existing learnings)
+
+### Phase 3 (Network)
+- [ ] Cross-user learning aggregation
+- [ ] Collaborative filtering (if you liked X, try Y)
+- [ ] Learning reputation scores from network
+- [ ] Automated learning curation
+
+---
+
+## Related Documents
+
+### Architecture
+- [Global Context Network](./architecture-global-context-network-2025-01-16.md)
+- [Hooks and Event Capture](./architecture-hooks-event-capture-2025-01-16.md)
+- [Database Schema](../reference/reference-database-schema-2025-01-16.md)
+
+### Standards
+- [Project Standards](../STANDARDS.md) - Canonical schema, IDs, status enums
+
+### Reference
+- [Database Schema Reference](../reference/reference-database-schema-2025-01-16.md)
+- [Job Queue Reference](../reference/reference-job-queue-2025-01-16.md)
+
+---
+
+**Document Version**: 1.0
+**Standards Compliance**: 100% aligned with STANDARDS.md
+**Review Status**: Ready for GPT-5 review
+</file>
+
+<file path="docs/reference/reference-database-schema-2025-01-16.md">
+# Database Schema Reference
+
+> Complete SQLite database schema with tables, indexes, migrations, and query patterns
+
+---
+title: Database Schema Reference
+category: reference
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [database, sqlite, schema, migrations, sql]
+applies_to: SQLite 3.40+, better-sqlite3 9.x
+schema_version: 1.0.0
+---
+
+## Overview
+
+The Global Context Network uses SQLite with WAL mode for local persistence. All data MUST be sanitized before insertion - there are NO raw content columns.
+
+**Core Principle**: Never store unsanitized data. Sanitization happens BEFORE database insertion.
+
+### Database Configuration
+
+```sql
+-- Required PRAGMAs (set on every connection)
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = FULL;
+PRAGMA busy_timeout = 5000;
+PRAGMA page_size = 8192;
+```
+
+### Connection Setup
+
+```typescript
+import Database from 'better-sqlite3';
+
+export function createDatabase(path: string): Database.Database {
+  const db = new Database(path);
+
+  // Enable required PRAGMAs
+  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = FULL');
+  db.pragma('busy_timeout = 5000');
+
+  return db;
+}
+```
+
+---
+
+## Tables
+
+### conversations
+
+Stores sanitized conversation metadata.
+
+```sql
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  session_id TEXT NOT NULL, -- Claude Code session identifier
+  correlation_id TEXT NOT NULL UNIQUE, -- For tracking conversation flow
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  completed_at TEXT, -- When conversation ended
+  sanitized BOOLEAN NOT NULL DEFAULT 1 CHECK (sanitized = 1), -- ALWAYS true
+  sanitization_version TEXT NOT NULL, -- e.g., "1.0.0"
+  message_count INTEGER NOT NULL DEFAULT 0,
+  metadata JSON -- Additional context (project path, user settings, etc.)
+);
+
+-- Indexes
+CREATE INDEX idx_conversations_session ON conversations(session_id);
+CREATE INDEX idx_conversations_created ON conversations(created_at DESC);
+CREATE INDEX idx_conversations_correlation ON conversations(correlation_id);
+
+-- Triggers for updated_at
+CREATE TRIGGER conversations_updated_at
+AFTER UPDATE ON conversations
+FOR EACH ROW
+BEGIN
+  UPDATE conversations SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique conversation identifier (ULID recommended for sortability)
+- `session_id`: Claude Code session ID for grouping
+- `correlation_id`: Unique ID for tracking across systems
+- `created_at`: When conversation started (auto-set)
+- `updated_at`: Last modification (auto-updated via trigger)
+- `completed_at`: When conversation ended (NULL if ongoing)
+- `sanitized`: MUST always be 1 (enforced by CHECK constraint)
+- `sanitization_version`: Version of sanitization rules applied
+- `message_count`: Cached count (updated via trigger)
+- `metadata`: JSON for flexible additional data
+
+**Performance Considerations**:
+- `session_id` index for session queries
+- `created_at DESC` index for recent conversations
+- `correlation_id` unique index for lookups
+
+---
+
+### messages
+
+Stores individual sanitized messages within conversations.
+
+```sql
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  conversation_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL, -- SANITIZED content only
+  content_hash TEXT NOT NULL, -- SHA-256 hash for deduplication
+  sequence INTEGER NOT NULL, -- Order within conversation (0, 1, 2, ...)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  token_count INTEGER, -- Approximate token count
+  metadata JSON, -- Thinking, tool calls, etc.
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  UNIQUE (conversation_id, sequence)
+);
+
+-- Indexes
+CREATE INDEX idx_messages_conversation ON messages(conversation_id, sequence);
+CREATE INDEX idx_messages_created ON messages(created_at DESC);
+CREATE INDEX idx_messages_hash ON messages(content_hash);
+
+-- Trigger to update conversation.message_count
+CREATE TRIGGER messages_after_insert
+AFTER INSERT ON messages
+FOR EACH ROW
+BEGIN
+  UPDATE conversations
+  SET message_count = message_count + 1
+  WHERE id = NEW.conversation_id;
+END;
+
+CREATE TRIGGER messages_after_delete
+AFTER DELETE ON messages
+FOR EACH ROW
+BEGIN
+  UPDATE conversations
+  SET message_count = message_count - 1
+  WHERE id = OLD.conversation_id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique message identifier
+- `conversation_id`: Parent conversation (CASCADE delete)
+- `role`: Message sender (user/assistant/system)
+- `content`: SANITIZED message content (NO PII)
+- `content_hash`: For detecting duplicate messages
+- `sequence`: Order within conversation (0-indexed)
+- `created_at`: When message was created
+- `token_count`: Approximate tokens (for cost tracking)
+- `metadata`: JSON for thinking, tool calls, attachments
+
+**CRITICAL**: This table has NO `raw_content` or `unsanitized_content` column. Sanitization MUST happen before insertion.
+
+---
+
+### learnings
+
+Stores extracted learnings with full-text search.
+
+```sql
+CREATE TABLE IF NOT EXISTS learnings (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  conversation_id TEXT NOT NULL,
+  source_message_ids JSON NOT NULL, -- Array of message IDs that produced this learning
+  category TEXT NOT NULL CHECK (
+    category IN (
+      'pattern',
+      'best_practice',
+      'anti_pattern',
+      'bug_fix',
+      'optimization',
+      'tool_usage',
+      'workflow',
+      'decision'
+    )
+  ),
+  title TEXT NOT NULL, -- Short summary
+  content TEXT NOT NULL, -- Detailed learning (SANITIZED)
+  confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  tags JSON NOT NULL DEFAULT '[]', -- Array of strings
+  dedupe_hash TEXT NOT NULL UNIQUE, -- For preventing duplicates
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  metadata JSON, -- Additional context
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_learnings_conversation ON learnings(conversation_id);
+CREATE INDEX idx_learnings_category ON learnings(category, confidence DESC);
+CREATE INDEX idx_learnings_confidence ON learnings(confidence DESC);
+CREATE INDEX idx_learnings_created ON learnings(created_at DESC);
+CREATE INDEX idx_learnings_dedupe ON learnings(dedupe_hash);
+
+-- Full-text search (FTS5)
+CREATE VIRTUAL TABLE learnings_fts USING fts5(
+  learning_id UNINDEXED,
+  title,
+  content,
+  tags,
+  content='learnings',
+  content_rowid='rowid'
+);
+
+-- Triggers to keep FTS in sync
+CREATE TRIGGER learnings_fts_insert
+AFTER INSERT ON learnings
+BEGIN
+  INSERT INTO learnings_fts(rowid, learning_id, title, content, tags)
+  VALUES (NEW.rowid, NEW.id, NEW.title, NEW.content, NEW.tags);
+END;
+
+CREATE TRIGGER learnings_fts_delete
+AFTER DELETE ON learnings
+BEGIN
+  DELETE FROM learnings_fts WHERE rowid = OLD.rowid;
+END;
+
+CREATE TRIGGER learnings_fts_update
+AFTER UPDATE ON learnings
+BEGIN
+  DELETE FROM learnings_fts WHERE rowid = OLD.rowid;
+  INSERT INTO learnings_fts(rowid, learning_id, title, content, tags)
+  VALUES (NEW.rowid, NEW.id, NEW.title, NEW.content, NEW.tags);
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique learning identifier
+- `conversation_id`: Source conversation
+- `source_message_ids`: JSON array of message IDs
+- `category`: Type of learning (CHECK constraint enforced)
+- `title`: Short summary (used in lists)
+- `content`: Detailed learning text
+- `confidence`: Quality score 0.0-1.0
+- `tags`: JSON array of topic tags
+- `dedupe_hash`: Prevents duplicate learnings
+- `created_at`: When learning was extracted
+- `metadata`: Additional context
+
+**FTS5 Full-Text Search**:
+- Searches across `title`, `content`, and `tags`
+- BM25 ranking
+- Supports phrase queries, AND/OR, NEAR
+
+---
+
+### job_queue
+
+Persistent queue for async job processing.
+
+```sql
+CREATE TABLE IF NOT EXISTS job_queue (
+  id TEXT PRIMARY KEY, -- ULID (sortable)
+  type TEXT NOT NULL, -- 'sanitize', 'extract_learning', 'upload'
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (
+    status IN ('queued', 'running', 'succeeded', 'failed', 'quarantined')
+  ),
+  priority INTEGER NOT NULL DEFAULT 5 CHECK (priority >= 1 AND priority <= 10), -- 1=highest
+  run_at TEXT NOT NULL DEFAULT (datetime('now')), -- When to run (for delayed jobs)
+  locked_at TEXT, -- When job was claimed by worker
+  locked_by TEXT, -- Worker ID that claimed job
+  payload JSON NOT NULL, -- Job-specific data
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_retries INTEGER NOT NULL DEFAULT 3,
+  last_error TEXT, -- Error message from last failure
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  completed_at TEXT -- When job finished (success or quarantine)
+);
+
+-- Indexes for worker queries
+CREATE INDEX idx_job_queue_dequeue ON job_queue(status, priority, run_at)
+  WHERE status = 'queued';
+CREATE INDEX idx_job_queue_type ON job_queue(type, status);
+CREATE INDEX idx_job_queue_created ON job_queue(created_at DESC);
+
+-- Trigger for updated_at
+CREATE TRIGGER job_queue_updated_at
+AFTER UPDATE ON job_queue
+FOR EACH ROW
+BEGIN
+  UPDATE job_queue SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: ULID for time-sortable IDs
+- `type`: Job type for worker routing
+- `status`: Current state (queued/running/succeeded/failed/quarantined)
+- `priority`: 1-10, where 1 is highest priority
+- `run_at`: Delayed job support (run after this time)
+- `locked_at`: Optimistic locking timestamp
+- `locked_by`: Worker identifier (hostname + PID)
+- `payload`: JSON with job-specific parameters
+- `attempts`: Retry counter
+- `max_retries`: Max attempts before quarantine
+- `last_error`: Last failure reason
+- `completed_at`: When job finished
+
+**Worker Query Pattern** (Optimistic Locking):
+```sql
+UPDATE job_queue
+SET
+  status = 'running',
+  locked_at = datetime('now'),
+  locked_by = :worker_id,
+  attempts = attempts + 1
+WHERE id = (
+  SELECT id
+  FROM job_queue
+  WHERE status = 'queued'
+    AND run_at <= datetime('now')
+  ORDER BY priority ASC, run_at ASC
+  LIMIT 1
+)
+RETURNING *;
+```
+
+---
+
+### uploads
+
+Tracks uploads to global network (IPFS + blockchain).
+
+```sql
+CREATE TABLE IF NOT EXISTS uploads (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  learning_id TEXT NOT NULL UNIQUE,
+  ipfs_cid TEXT UNIQUE, -- Content Identifier from IPFS
+  chain_tx_hash TEXT UNIQUE, -- Blockchain transaction hash
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (
+    status IN ('pending', 'ipfs_uploaded', 'tx_submitted', 'confirmed', 'failed')
+  ),
+  retries INTEGER NOT NULL DEFAULT 0,
+  max_retries INTEGER NOT NULL DEFAULT 5,
+  last_error TEXT, -- Error from last attempt
+  tokens_earned REAL, -- Reward amount (if confirmed)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  uploaded_at TEXT, -- When IPFS upload succeeded
+  confirmed_at TEXT, -- When blockchain tx confirmed
+
+  FOREIGN KEY (learning_id) REFERENCES learnings(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_uploads_learning ON uploads(learning_id);
+CREATE INDEX idx_uploads_status ON uploads(status);
+CREATE INDEX idx_uploads_created ON uploads(created_at DESC);
+CREATE UNIQUE INDEX idx_uploads_ipfs_cid ON uploads(ipfs_cid) WHERE ipfs_cid IS NOT NULL;
+CREATE UNIQUE INDEX idx_uploads_tx_hash ON uploads(chain_tx_hash) WHERE chain_tx_hash IS NOT NULL;
+
+-- Trigger for updated_at
+CREATE TRIGGER uploads_updated_at
+AFTER UPDATE ON uploads
+FOR EACH ROW
+BEGIN
+  UPDATE uploads SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique upload identifier
+- `learning_id`: Source learning (UNIQUE - one upload per learning)
+- `ipfs_cid`: Content identifier from IPFS
+- `chain_tx_hash`: Blockchain transaction hash
+- `status`: Upload lifecycle state
+- `retries`: Attempt counter
+- `max_retries`: Max attempts before giving up
+- `last_error`: Last failure reason
+- `tokens_earned`: Reward if confirmed
+- `uploaded_at`: IPFS upload timestamp
+- `confirmed_at`: Blockchain confirmation timestamp
+
+**Upload States**:
+1. `pending` → Initial state
+2. `ipfs_uploaded` → Content in IPFS, have CID
+3. `tx_submitted` → Blockchain tx sent
+4. `confirmed` → Tx confirmed, tokens earned
+5. `failed` → Max retries exceeded
+
+---
+
+### sanitization_log
+
+Audit trail of all PII detections and redactions.
+
+```sql
+CREATE TABLE IF NOT EXISTS sanitization_log (
+  id TEXT PRIMARY KEY, -- ULID for time ordering
+  conversation_id TEXT NOT NULL,
+  message_id TEXT, -- NULL if conversation-level sanitization
+  category TEXT NOT NULL, -- PII type (api_key, email, file_path, etc.)
+  rule_id TEXT, -- Which rule detected it (for rule-based)
+  original_snippet_hash TEXT NOT NULL, -- SHA-256 of original text
+  replacement TEXT NOT NULL, -- What it was replaced with
+  detector TEXT NOT NULL CHECK (detector IN ('rule', 'ai', 'hybrid')),
+  confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  metadata JSON, -- Additional context
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_sanitization_log_conversation ON sanitization_log(conversation_id);
+CREATE INDEX idx_sanitization_log_message ON sanitization_log(message_id);
+CREATE INDEX idx_sanitization_log_category ON sanitization_log(category);
+CREATE INDEX idx_sanitization_log_created ON sanitization_log(created_at DESC);
+```
+
+**Column Descriptions**:
+- `id`: ULID for time-ordered audit trail
+- `conversation_id`: Parent conversation
+- `message_id`: Specific message (NULL for conversation-wide)
+- `category`: Type of PII detected
+- `rule_id`: Identifier of detection rule
+- `original_snippet_hash`: Hash of PII (NEVER store actual PII)
+- `replacement`: Replacement text used
+- `detector`: Which system detected it
+- `confidence`: Detection confidence score
+- `created_at`: When detection occurred
+- `metadata`: Additional context (position, surrounding text hash)
+
+**CRITICAL**: NEVER store actual PII in this table. Use `original_snippet_hash` only.
+
+---
+
+## Migrations
+
+### Migration System
+
+```typescript
+// src/database/migrations/runner.ts
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
+
+interface Migration {
+  version: number;
+  name: string;
+  up: string;
+  down: string;
+}
+
+// Migrations table
+function createMigrationsTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+// Get current version
+function getCurrentVersion(db: Database.Database): number {
+  const row = db.prepare('SELECT MAX(version) as version FROM _migrations').get() as { version: number | null };
+  return row.version ?? 0;
+}
+
+// Load migration files
+function loadMigrations(dir: string): Migration[] {
+  const files = fs.readdirSync(dir).sort();
+  const migrations: Migration[] = [];
+
+  for (const file of files) {
+    if (!file.endsWith('.sql')) continue;
+
+    const match = file.match(/^(\d+)_(.+)\.sql$/);
+    if (!match) continue;
+
+    const version = parseInt(match[1], 10);
+    const name = match[2];
+    const content = fs.readFileSync(path.join(dir, file), 'utf8');
+
+    // Split on -- UP / -- DOWN markers
+    const [up, down] = content.split(/--\s*DOWN/i);
+    const upSql = up.replace(/--\s*UP/i, '').trim();
+    const downSql = down?.trim() || '';
+
+    migrations.push({ version, name, up: upSql, down: downSql });
+  }
+
+  return migrations;
+}
+
+// Run migrations
+export function runMigrations(db: Database.Database, targetVersion?: number): void {
+  createMigrationsTable(db);
+
+  const currentVersion = getCurrentVersion(db);
+  const migrations = loadMigrations(path.join(__dirname, 'sql'));
+
+  const toApply = migrations.filter(m =>
+    m.version > currentVersion && (!targetVersion || m.version <= targetVersion)
+  );
+
+  if (toApply.length === 0) {
+    console.log('No migrations to apply');
+    return;
+  }
+
+  for (const migration of toApply) {
+    console.log(`Applying migration ${migration.version}: ${migration.name}`);
+
+    const applyMigration = db.transaction(() => {
+      db.exec(migration.up);
+      db.prepare('INSERT INTO _migrations (version, name) VALUES (?, ?)').run(migration.version, migration.name);
+    });
+
+    applyMigration();
+  }
+
+  console.log(`Migrated to version ${toApply[toApply.length - 1].version}`);
+}
+
+// Rollback migrations
+export function rollbackMigrations(db: Database.Database, targetVersion: number): void {
+  const currentVersion = getCurrentVersion(db);
+  const migrations = loadMigrations(path.join(__dirname, 'sql'));
+
+  const toRollback = migrations
+    .filter(m => m.version > targetVersion && m.version <= currentVersion)
+    .reverse();
+
+  if (toRollback.length === 0) {
+    console.log('No migrations to rollback');
+    return;
+  }
+
+  for (const migration of toRollback) {
+    console.log(`Rolling back migration ${migration.version}: ${migration.name}`);
+
+    const rollback = db.transaction(() => {
+      db.exec(migration.down);
+      db.prepare('DELETE FROM _migrations WHERE version = ?').run(migration.version);
+    });
+
+    rollback();
+  }
+
+  console.log(`Rolled back to version ${targetVersion}`);
+}
+```
+
+### Example Migration File
+
+```sql
+-- migrations/001_initial.sql
+
+-- UP
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  correlation_id TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  sanitized BOOLEAN NOT NULL DEFAULT 1 CHECK (sanitized = 1),
+  sanitization_version TEXT NOT NULL,
+  message_count INTEGER NOT NULL DEFAULT 0,
+  metadata JSON
+);
+
+CREATE INDEX idx_conversations_session ON conversations(session_id);
+CREATE INDEX idx_conversations_created ON conversations(created_at DESC);
+
+CREATE TRIGGER conversations_updated_at
+AFTER UPDATE ON conversations
+FOR EACH ROW
+BEGIN
+  UPDATE conversations SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
+-- DOWN
+DROP TRIGGER IF EXISTS conversations_updated_at;
+DROP INDEX IF EXISTS idx_conversations_created;
+DROP INDEX IF EXISTS idx_conversations_session;
+DROP TABLE IF EXISTS conversations;
+```
+
+---
+
+## Query Patterns
+
+### Repository Base Class
+
+```typescript
+// src/database/repositories/base-repository.ts
+import Database from 'better-sqlite3';
+
+export abstract class BaseRepository<T> {
+  constructor(protected db: Database.Database) {}
+
+  protected transaction<R>(fn: () => R): R {
+    const trans = this.db.transaction(fn);
+    return trans();
+  }
+
+  protected prepare(sql: string): Database.Statement {
+    return this.db.prepare(sql);
+  }
+
+  abstract create(data: Partial<T>): T;
+  abstract findById(id: string): T | null;
+  abstract update(id: string, data: Partial<T>): T;
+  abstract delete(id: string): void;
+}
+```
+
+### Conversation Repository
+
+```typescript
+// src/database/repositories/conversation-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+
+export interface Conversation {
+  id: string;
+  session_id: string;
+  correlation_id: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  sanitized: boolean;
+  sanitization_version: string;
+  message_count: number;
+  metadata: any;
+}
+
+export class ConversationRepository extends BaseRepository<Conversation> {
+  create(data: Partial<Conversation>): Conversation {
+    const id = data.id || ulid();
+    const correlation_id = data.correlation_id || ulid();
+    const sanitization_version = data.sanitization_version || '1.0.0';
+
+    this.prepare(`
+      INSERT INTO conversations (id, session_id, correlation_id, sanitization_version, metadata)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.session_id,
+      correlation_id,
+      sanitization_version,
+      JSON.stringify(data.metadata || {})
+    );
+
+    return this.findById(id)!;
+  }
+
+  findById(id: string): Conversation | null {
+    const row = this.prepare('SELECT * FROM conversations WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  findByCorrelationId(correlationId: string): Conversation | null {
+    const row = this.prepare('SELECT * FROM conversations WHERE correlation_id = ?').get(correlationId);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  findBySession(sessionId: string, limit = 10): Conversation[] {
+    const rows = this.prepare(`
+      SELECT * FROM conversations
+      WHERE session_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(sessionId, limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  update(id: string, data: Partial<Conversation>): Conversation {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (data.completed_at !== undefined) {
+      updates.push('completed_at = ?');
+      values.push(data.completed_at);
+    }
+    if (data.metadata !== undefined) {
+      updates.push('metadata = ?');
+      values.push(JSON.stringify(data.metadata));
+    }
+
+    if (updates.length === 0) {
+      return this.findById(id)!;
+    }
+
+    values.push(id);
+
+    this.prepare(`
+      UPDATE conversations
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `).run(...values);
+
+    return this.findById(id)!;
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM conversations WHERE id = ?').run(id);
+  }
+
+  private deserialize(row: any): Conversation {
+    return {
+      ...row,
+      sanitized: Boolean(row.sanitized),
+      metadata: row.metadata ? JSON.parse(row.metadata) : {}
+    };
+  }
+}
+```
+
+### Learning Repository with FTS
+
+```typescript
+// src/database/repositories/learning-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+import crypto from 'crypto';
+
+export interface Learning {
+  id: string;
+  conversation_id: string;
+  source_message_ids: string[];
+  category: string;
+  title: string;
+  content: string;
+  confidence: number;
+  tags: string[];
+  dedupe_hash: string;
+  created_at: string;
+  metadata: any;
+}
+
+export class LearningRepository extends BaseRepository<Learning> {
+  create(data: Partial<Learning>): Learning {
+    const id = data.id || ulid();
+    const dedupe_hash = this.generateDedupeHash(data.content!, data.category!);
+
+    this.prepare(`
+      INSERT INTO learnings (
+        id, conversation_id, source_message_ids, category, title,
+        content, confidence, tags, dedupe_hash, metadata
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.conversation_id,
+      JSON.stringify(data.source_message_ids || []),
+      data.category,
+      data.title,
+      data.content,
+      data.confidence,
+      JSON.stringify(data.tags || []),
+      dedupe_hash,
+      JSON.stringify(data.metadata || {})
+    );
+
+    return this.findById(id)!;
+  }
+
+  findById(id: string): Learning | null {
+    const row = this.prepare('SELECT * FROM learnings WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  search(query: string, options: {
+    category?: string;
+    minConfidence?: number;
+    limit?: number;
+  } = {}): Learning[] {
+    const limit = options.limit || 10;
+    const minConfidence = options.minConfidence || 0.0;
+
+    let sql = `
+      SELECT l.*
+      FROM learnings l
+      JOIN learnings_fts fts ON l.rowid = fts.rowid
+      WHERE fts MATCH ?
+        AND l.confidence >= ?
+    `;
+
+    const params: any[] = [query, minConfidence];
+
+    if (options.category) {
+      sql += ' AND l.category = ?';
+      params.push(options.category);
+    }
+
+    sql += ' ORDER BY bm25(fts), l.confidence DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = this.prepare(sql).all(...params);
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findByCategory(category: string, limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      WHERE category = ?
+      ORDER BY confidence DESC, created_at DESC
+      LIMIT ?
+    `).all(category, limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findRecent(limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findTopRated(limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      ORDER BY confidence DESC, created_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  update(id: string, data: Partial<Learning>): Learning {
+    // Learnings are generally immutable, but allow confidence updates
+    if (data.confidence !== undefined) {
+      this.prepare('UPDATE learnings SET confidence = ? WHERE id = ?').run(data.confidence, id);
+    }
+    return this.findById(id)!;
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM learnings WHERE id = ?').run(id);
+  }
+
+  private generateDedupeHash(content: string, category: string): string {
+    return crypto.createHash('sha256').update(`${category}:${content}`).digest('hex');
+  }
+
+  private deserialize(row: any): Learning {
+    return {
+      ...row,
+      source_message_ids: JSON.parse(row.source_message_ids),
+      tags: JSON.parse(row.tags),
+      metadata: row.metadata ? JSON.parse(row.metadata) : {}
+    };
+  }
+}
+```
+
+### Job Queue Repository
+
+```typescript
+// src/database/repositories/job-queue-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+import os from 'os';
+
+export interface Job {
+  id: string;
+  type: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'quarantined';
+  priority: number;
+  run_at: string;
+  locked_at: string | null;
+  locked_by: string | null;
+  payload: any;
+  attempts: number;
+  max_retries: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export class JobQueueRepository extends BaseRepository<Job> {
+  private workerId = `${os.hostname()}-${process.pid}`;
+
+  create(data: Partial<Job>): Job {
+    const id = data.id || ulid();
+    const priority = data.priority || 5;
+    const max_retries = data.max_retries || 3;
+    const run_at = data.run_at || new Date().toISOString();
+
+    this.prepare(`
+      INSERT INTO job_queue (id, type, priority, run_at, payload, max_retries)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.type,
+      priority,
+      run_at,
+      JSON.stringify(data.payload || {}),
+      max_retries
+    );
+
+    return this.findById(id)!;
+  }
+
+  // Optimistic locking: claim next job
+  dequeue(): Job | null {
+    const updated = this.prepare(`
+      UPDATE job_queue
+      SET
+        status = 'running',
+        locked_at = datetime('now'),
+        locked_by = ?,
+        attempts = attempts + 1
+      WHERE id = (
+        SELECT id
+        FROM job_queue
+        WHERE status = 'queued'
+          AND run_at <= datetime('now')
+        ORDER BY priority ASC, run_at ASC
+        LIMIT 1
+      )
+      RETURNING *
+    `).get(this.workerId);
+
+    return updated ? this.deserialize(updated as any) : null;
+  }
+
+  markSucceeded(id: string): void {
+    this.prepare(`
+      UPDATE job_queue
+      SET status = 'succeeded', completed_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+  }
+
+  markFailed(id: string, error: string): void {
+    const job = this.findById(id);
+    if (!job) return;
+
+    if (job.attempts >= job.max_retries) {
+      // Quarantine
+      this.prepare(`
+        UPDATE job_queue
+        SET status = 'quarantined', last_error = ?, completed_at = datetime('now')
+        WHERE id = ?
+      `).run(error, id);
+    } else {
+      // Requeue with backoff
+      const backoffMs = Math.pow(2, job.attempts) * 1000;
+      const runAt = new Date(Date.now() + backoffMs).toISOString();
+
+      this.prepare(`
+        UPDATE job_queue
+        SET status = 'queued', last_error = ?, run_at = ?, locked_at = NULL, locked_by = NULL
+        WHERE id = ?
+      `).run(error, runAt, id);
+    }
+  }
+
+  findById(id: string): Job | null {
+    const row = this.prepare('SELECT * FROM job_queue WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  // Clean up stale locks (workers that crashed)
+  releaseStaleJobs(timeout_ms = 300000): number {
+    const staleTime = new Date(Date.now() - timeout_ms).toISOString();
+
+    const result = this.prepare(`
+      UPDATE job_queue
+      SET status = 'queued', locked_at = NULL, locked_by = NULL
+      WHERE status = 'running'
+        AND locked_at < ?
+    `).run(staleTime);
+
+    return result.changes;
+  }
+
+  update(id: string, data: Partial<Job>): Job {
+    throw new Error('Use specific methods (markSucceeded, markFailed)');
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM job_queue WHERE id = ?').run(id);
+  }
+
+  private deserialize(row: any): Job {
+    return {
+      ...row,
+      payload: JSON.parse(row.payload)
+    };
+  }
+}
+```
+
+---
+
+## Performance Optimization
+
+### Query Performance Tips
+
+1. **Always use indexes for foreign keys**
+2. **Add covering indexes for frequent queries**
+3. **Use EXPLAIN QUERY PLAN to verify index usage**
+4. **Keep transactions short**
+5. **Use prepared statements (auto-cached)**
+
+### EXPLAIN Example
+
+```sql
+EXPLAIN QUERY PLAN
+SELECT l.*
+FROM learnings l
+JOIN learnings_fts fts ON l.rowid = fts.rowid
+WHERE fts MATCH 'typescript testing'
+  AND l.category = 'pattern'
+ORDER BY bm25(fts), l.confidence DESC
+LIMIT 10;
+
+-- Should use:
+-- - FTS index for MATCH
+-- - idx_learnings_category for category filter
+```
+
+### Maintenance
+
+```typescript
+// Run periodically
+export function optimizeDatabase(db: Database.Database): void {
+  // Rebuild FTS index
+  db.exec('INSERT INTO learnings_fts(learnings_fts) VALUES("rebuild")');
+
+  // Update statistics
+  db.exec('ANALYZE');
+
+  // Vacuum (compact database)
+  db.exec('VACUUM');
+}
+```
+
+---
+
+## Backup & Restore
+
+### Backup
+
+```typescript
+import Database from 'better-sqlite3';
+
+export async function backupDatabase(sourceDb: Database.Database, destPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const backup = sourceDb.backup(destPath);
+
+    const doBackup = () => {
+      const remaining = backup.step(100); // Pages per step
+      if (remaining === 0) {
+        backup.close();
+        resolve();
+      } else {
+        setImmediate(doBackup);
+      }
+    };
+
+    try {
+      doBackup();
+    } catch (error) {
+      backup.close();
+      reject(error);
+    }
+  });
+}
+```
+
+### Restore
+
+```typescript
+export async function restoreDatabase(sourceDb: Database.Database, destPath: string): Promise<void> {
+  const destDb = new Database(destPath);
+
+  try {
+    await backupDatabase(sourceDb, destPath);
+    console.log(`Restored to ${destPath}`);
+  } finally {
+    destDb.close();
+  }
+}
+```
+
+### Verification
+
+```typescript
+export function verifyDatabase(db: Database.Database): boolean {
+  const result = db.pragma('integrity_check', { simple: true });
+  return result === 'ok';
+}
+```
+
+---
+
+## Related Documents
+
+### Architecture
+- [Global Context Network](../architecture/architecture-global-context-network-2025-01-16.md)
+- [Database Schema Architecture](../architecture/architecture-database-schema-2025-01-16.md)
+
+### Reference
+- [Testing Strategy](./reference-testing-strategy-2025-01-16.md)
+- [Subagent Types](./reference-subagent-types-2025-01-16.md)
+
+### Guides
+- [Database Setup Guide](../guides/guide-database-setup-2025-01-16.md)
+</file>
+
+<file path="docs/STANDARDS.md">
+# Global Context Network - Project Standards
+
+> **CRITICAL**: All documentation and code MUST follow these standards to ensure consistency across the entire system.
+
+---
+**Date**: 2025-01-16
+**Status**: CANONICAL - These are the single source of truth for all project standards
+**Authority**: Established from review feedback (GPT-5, Gemini 2.5 Pro) to resolve contradictions
+
+---
+
+## 1. Privacy & Data Flow Standard (MOST CRITICAL)
+
+### Rule: NEVER Persist Raw Data
+
+**Canonical Privacy Flow**:
+```
+User Input → Hook Receives Event (in-memory)
+           → Fast Pre-Sanitization (<50ms, rule-based)
+           → Persist ONLY Sanitized Content to Database
+           → Optional AI Validation (async, downstream)
+```
+
+**What This Means**:
+- ✅ **DO**: Pre-sanitize synchronously in hook using fast regex rules
+- ✅ **DO**: Only write sanitized content to disk (messages table)
+- ✅ **DO**: Use in-memory buffers if needed (exempt from persistence)
+- ❌ **NEVER**: Persist raw content to SQLite (not even temporarily)
+- ❌ **NEVER**: Write raw content to event_queue, events table, or any disk storage
+- ❌ **NEVER**: Log raw content before sanitization
+
+**Why**: Zero-trust PII handling. If raw data never touches disk, we can guarantee no PII leaks.
+
+---
+
+## 2. Schema Standard (CANONICAL)
+
+### Official Tables
+
+**Production Tables**:
+1. `conversations` - Conversation metadata
+2. `messages` - Individual messages (SANITIZED content only)
+3. `learnings` - Extracted insights
+4. `job_queue` - Async job processing
+5. `uploads` - Network upload status
+6. `sanitization_log` - Audit trail
+
+**Eliminated Tables**:
+- ❌ NO `events` table
+- ❌ NO `event_queue` table
+- **Rationale**: These implied raw content persistence. We write sanitized directly to `messages`.
+
+### Data Flow
+
+```
+Hook (sanitize) → messages table (sanitized content)
+                → job_queue (jobs for AI validation, learning extraction, upload)
+```
+
+---
+
+## 3. Status Enum Standard (CANONICAL)
+
+All async operations use this vocabulary:
+
+```typescript
+type JobStatus =
+  | 'queued'        // Initial state
+  | 'in_progress'   // Worker claimed
+  | 'completed'     // Succeeded
+  | 'failed'        // Failed but retriable
+  | 'dead_letter';  // Failed permanently
+```
+
+**Usage**:
+- `job_queue.status`: Uses this enum
+- Upload status: Uses this enum
+- Worker states: Uses this enum
+
+**Eliminated Alternatives**:
+- ❌ NO "pending/processing" (use queued/in_progress)
+- ❌ NO "running/succeeded" (use in_progress/completed)
+- ❌ NO "quarantined" (use dead_letter)
+
+---
+
+## 4. ID Strategy Standard (CANONICAL)
+
+### Use ULID Globally
+
+```typescript
+import { ulid } from 'ulid';
+
+// All IDs use ULID
+const conversationId = ulid(); // Lexicographically sortable, chronological
+const messageId = ulid();
+const learningId = ulid();
+```
+
+**Why ULID over UUID**:
+- Chronologically sortable
+- Lexicographic ordering matches creation time
+- No need for separate timestamps in indexes
+- Better database index performance
+
+**Eliminated**: UUID v4 (not sortable)
+
+---
+
+## 5. Hook Configuration Standard (CANONICAL)
+
+### Config File Path
+```
+.claude/hooks.json
+```
+**NOT**: `.claude/hooks/hooks.json` (eliminated)
+
+### Hook IO Method
+```typescript
+// Hooks receive events via stdin (JSON)
+const event = JSON.parse(await readStdin());
+```
+**NOT**: `process.argv` (eliminated)
+
+### Hook Format
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
+    "Stop": ".claude/hooks/dist/stop.js"
+  }
+}
+```
+
+**CRITICAL**:
+- ✅ Point to compiled `.js` files (in `dist/` or `build/`)
+- ❌ NEVER use ts-node at runtime (too slow for <100ms budget)
+- ✅ Build step: `tsc` compiles TypeScript to JavaScript
+- ✅ Hooks run compiled JS only
+
+---
+
+## 6. Chain-of-Thought Standard (CANONICAL)
+
+### Rule: NEVER Capture Chain-of-Thought
+
+**What We Capture**:
+- ✅ User prompts
+- ✅ Assistant responses (visible output)
+- ✅ Tool calls and results
+- ✅ File operations
+- ✅ Error messages
+
+**What We NEVER Capture**:
+- ❌ Hidden chain-of-thought (internal reasoning)
+- ❌ "Thinking" blocks (if present)
+- ❌ Internal model reasoning traces
+
+**Why**:
+1. Provider policy compliance
+2. Privacy concerns
+3. No reliable access anyway (Claude Code doesn't expose it)
+
+**Action**: Remove all references to "thinking processes" or "reasoning capture" from docs.
+
+---
+
+## 7. Timestamp Standard (CANONICAL)
+
+### Use ISO-8601 Strings
+
+```typescript
+// All timestamps in database
+created_at: '2025-01-16T12:00:00.000Z'  // ISO-8601 UTC string
+
+// Generated via:
+new Date().toISOString()
+```
+
+**Why**:
+- Human-readable
+- Standard format
+- Timezone-aware (always UTC with Z)
+- SQLite text column compatible
+
+**Eliminated**: Unix epoch milliseconds (not human-readable)
+
+---
+
+## 8. Import Standards
+
+### Performance Timing
+```typescript
+import { performance } from 'node:perf_hooks';
+
+const start = performance.now();
+// ... work ...
+const duration = performance.now() - start;
+```
+**NOT**: `performance.now()` without import (will error)
+
+### Database
+```typescript
+import Database from 'better-sqlite3';
+
+const db = new Database('context.db');
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
+```
+
+### IDs
+```typescript
+import { ulid } from 'ulid';
+
+const id = ulid();
+```
+
+---
+
+## 9. Sanitization Standard
+
+### Fast Pre-Sanitization (In Hook)
+
+**Budget**: <50ms (synchronous, rule-based)
+
+**What to Redact**:
+1. API keys (OpenAI, Anthropic, AWS, Google, GitHub, etc.)
+2. Absolute file paths with usernames
+3. Email addresses
+4. IP addresses
+5. Phone numbers
+6. URLs with tokens/secrets
+7. JWT tokens
+8. Environment variable values
+9. SSH keys, PEM blocks
+10. Credit card numbers, SSNs
+
+**Redaction Format**:
+```typescript
+"[REDACTED_API_KEY]"
+"[REDACTED_EMAIL]"
+"[REDACTED_PATH]"
+"[REDACTED_IP]"
+```
+
+**Pseudonymization** (optional, session-scoped):
+```typescript
+"<EMAIL_1>", "<EMAIL_2>"  // Same email = same placeholder within session
+"<PATH_1>", "<PATH_2>"    // Same path = same placeholder
+```
+
+### AI Validation (Async, Downstream)
+
+**Budget**: <2s per conversation (async job)
+
+**Purpose**:
+- Catch context-aware PII (names that look like variables)
+- Validate pre-sanitization caught everything
+- Handle edge cases
+
+**Not a replacement**: AI runs AFTER pre-sanitization, not instead of.
+
+---
+
+## 10. File Path Standards
+
+### Hook Scripts
+```
+.claude/hooks/
+  src/
+    userPromptSubmit.ts
+    stop.ts
+  dist/              # Compiled output
+    userPromptSubmit.js
+    stop.js
+  tsconfig.json
+  package.json
+```
+
+### Project Structure
+```
+docs/
+  architecture/
+  decisions/
+  plans/
+  guides/
+  reference/
+  learnings/
+  reviews/
+src/
+  hooks/
+  sanitization/
+  learning/
+  mcp/
+  database/
+tests/
+  unit/
+  integration/
+  e2e/
+```
+
+---
+
+## 11. Testing Standards
+
+### Coverage Requirements
+- **Global**: ≥85% line coverage
+- **Critical paths** (sanitization, hooks): ≥95% line + branch coverage
+- **Learnings extraction**: ≥80%
+
+### Test Types
+- **70% Unit tests**: Isolated, fast, mocked
+- **20% Integration tests**: Component interactions
+- **10% E2E tests**: Full workflows
+
+### Naming
+```typescript
+describe('sanitizeContent', () => {
+  it('should redact API keys', () => {
+    // arrange
+    const input = 'key: sk-1234567890';
+
+    // act
+    const result = sanitizeContent(input);
+
+    // assert
+    expect(result).toBe('key: [REDACTED_API_KEY]');
+  });
+});
+```
+
+---
+
+## 12. Performance Budgets
+
+| Component | Budget | Measurement |
+|-----------|--------|-------------|
+| Hook execution | <100ms p95 | End-to-end (receive → sanitize → persist) |
+| Fast sanitization | <50ms p95 | Regex-based rules only |
+| Database writes | <20ms p95 | WAL-mode insert |
+| Database queries | <100ms p95 | Indexed lookups |
+| MCP queries | <200ms p95 | Search + serialization |
+| AI sanitization | <2s p95 | Claude API call |
+| Learning extraction | <5s p95 | Claude API call |
+
+---
+
+## 13. Error Handling Standards
+
+### Hooks
+```typescript
+try {
+  // Hook work
+} catch (error) {
+  // NEVER throw or block user
+  logger.error('Hook failed', { error, event });
+  // Fail silently
+}
+```
+
+### Workers
+```typescript
+// Retry with exponential backoff
+const maxAttempts = 3;
+for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  try {
+    await processJob(job);
+    break;
+  } catch (error) {
+    if (attempt === maxAttempts) {
+      await moveToDeadLetter(job, error);
+    } else {
+      await sleep(2 ** attempt * 1000);
+    }
+  }
+}
+```
+
+---
+
+## 14. Logging Standards
+
+### Structured Logging
+```typescript
+logger.info('Event captured', {
+  conversation_id: conversationId,
+  message_id: messageId,
+  role: 'user',
+  content_length: sanitizedContent.length,  // NEVER log raw content
+  duration_ms: duration
+});
+```
+
+### Privacy in Logs
+- ❌ NEVER log raw content
+- ❌ NEVER log PII before sanitization
+- ✅ Log sanitized content (optional, for debugging)
+- ✅ Log metadata (IDs, lengths, durations)
+
+---
+
+## 15. Blockchain Standard (Clarified)
+
+### EVM Chain Selection (Not Celestia)
+
+**For MVP**:
+- Target: Ethereum L2 (Base, Arbitrum, Optimism, or Polygon)
+- **NOT Celestia**: Celestia is data availability layer, not EVM-compatible
+
+**Celestia Usage** (optional, future):
+- Can use for data availability (content commitments)
+- Requires separate integration
+
+**Clarification**:
+- Smart contracts = EVM chain
+- Data availability = Celestia
+- Don't conflate the two
+
+---
+
+## 16. Consent & Licensing Standard
+
+### Default Behavior
+- **Default**: Local-only mode (no uploads)
+- **Opt-in required**: User must explicitly enable global sharing
+- **Manual approval gate**: Each upload requires confirmation (MVP)
+
+### License for Learnings
+- **Recommended**: CC BY 4.0 or ODC-By for shared learnings
+- **Prohibited**: Sharing raw conversations (only derived learnings)
+
+**ADR Required**: ADR-007 must formalize this
+
+---
+
+## 17. Documentation Standards
+
+### File Naming
+```
+category-topic-YYYY-MM-DD.md
+
+Examples:
+- architecture-sanitization-pipeline-2025-01-16.md
+- decision-use-ulid-2025-01-16.md
+- guide-hook-development-2025-01-16.md
+```
+
+### Frontmatter (Required)
+```yaml
+---
+title: Document Title
+category: architecture|decision|plan|guide|reference|learning
+date: 2025-01-16
+status: active|draft|archived
+authors: Name(s)
+tags: [tag1, tag2]
+---
+```
+
+### Cross-Linking
+- Always link to related docs in "Related Documents" section
+- Use relative paths: `../architecture/file.md`
+- Update category INDEX.md when adding files
+
+---
+
+## 18. Code Standards
+
+### TypeScript Strict Mode
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true
+  }
+}
+```
+
+### No `any` Types
+```typescript
+// ❌ BAD
+function process(data: any) { }
+
+// ✅ GOOD
+function process(data: unknown) {
+  if (typeof data === 'string') {
+    // Type guard
+  }
+}
+
+// ✅ BETTER
+interface EventData {
+  role: string;
+  content: string;
+}
+function process(data: EventData) { }
+```
+
+---
+
+## Enforcement
+
+### All New Documents MUST:
+1. Reference this STANDARDS.md file
+2. Use canonical schema (messages + job_queue)
+3. Use canonical status enums (queued → in_progress → completed → failed → dead_letter)
+4. Use ULID for all IDs
+5. Follow privacy flow (pre-sanitize, never persist raw)
+6. Exclude chain-of-thought universally
+7. Use .claude/hooks.json path
+8. Use compiled .js hooks
+9. Use ISO-8601 timestamps
+10. Follow performance budgets
+
+### Review Checklist
+
+Before any document is finalized:
+- [ ] Uses canonical schema (no events/event_queue tables)
+- [ ] Uses canonical status enums
+- [ ] Uses ULID for IDs
+- [ ] Pre-sanitizes in hook (never persists raw)
+- [ ] Excludes chain-of-thought
+- [ ] Uses .claude/hooks.json config path
+- [ ] References compiled .js hooks (not ts-node)
+- [ ] Uses ISO-8601 timestamps
+- [ ] Performance budgets specified
+- [ ] Privacy guarantees maintained
+
+---
+
+## Related Documents
+
+- [ADR-004: Sanitize Before Storage](./decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [Database Schema Reference](./reference/reference-database-schema-2025-01-16.md)
+- [Architecture: Hooks & Event Capture](./architecture/architecture-hooks-event-capture-2025-01-16.md)
+
+---
+
+*This document is the canonical source of truth for all project standards. When in doubt, refer here. If standards conflict with other docs, THIS document wins.*
+</file>
+
+</files>

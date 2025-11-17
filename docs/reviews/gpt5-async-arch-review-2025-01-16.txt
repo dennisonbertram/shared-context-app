@@ -1,0 +1,67 @@
+Summary: I could not access docs/architecture/architecture-async-processing-2025-01-16.md in the provided pack (only STANDARDS.md, ADR-006, and reference-database-schema were included). The review below flags MUST-fix items and alignment risks based on the standards and ADR-006. Please provide the architecture document content to confirm, but several deviations are already evident from surrounding docs and code snippets that are likely mirrored there.
+
+Critical issues (MUST fix)
+- Privacy/data flow violation:
+  - STANDARDS requires fast pre-sanitization in the hook and forbids persisting raw data. ADR-006 shows a sanitize_conversation async job and an outbox flow that inserts a conversation then sanitizes later (and handler references conversation.content and sanitized_content/status fields). This implies raw content at rest, which is strictly prohibited. Fix by:
+    - Performing pre-sanitization in the hook (<50ms) before any persistence.
+    - If you keep a sanitization job, make it “AI validation” only and operate on already-sanitized records.
+- Canonical status enums mismatch across repository docs:
+  - STANDARDS canonical enum: queued | in_progress | completed | failed | dead_letter.
+  - ADR-006 uses canonical values (good), but the reference database schema uses running | succeeded | quarantined (non-canonical). Architecture doc must adopt canonical enums everywhere and remove “running/succeeded/quarantined.”
+- Timestamp format mismatch:
+  - STANDARDS mandates ISO-8601 TEXT timestamps. ADR-006 examples use INTEGER epoch ms and Date.now(). Architecture doc and schema must be updated to use ISO-8601 strings in all tables and code paths (created_at, run_at/scheduled_at, started/locked/completed etc.).
+- job_queue schema misalignment:
+  - Canonical (per reference doc adjusted to STANDARDS) uses columns like run_at (TEXT), locked_at, locked_by, attempts, last_error, updated_at trigger, and an atomic dequeue via a single UPDATE ... WHERE ... ORDER BY ... LIMIT 1 RETURNING.
+  - ADR-006 uses scheduled_at, started_at, lease_expires_at, retry_count, error/result, and a SELECT-then-UPDATE claim in a transaction. This deviates from the canonical schema and is racy with multiple workers. Architecture doc must align columns and the atomic claim pattern to the canonical approach (UPDATE ... RETURNING with run_at, locked_at/locked_by, attempts).
+- “Event Queue” terminology and tables:
+  - STANDARDS eliminated events/event_queue tables and prescribes direct writes to messages plus job_queue. ADR-006 still diagrams “Event Queue.” Architecture doc must not introduce or imply an event_queue; use messages + job_queue only.
+- ULID requirement:
+  - STANDARDS mandates ULID for all IDs. ADR-006 examples show generateId() (unspecified) and no explicit ULID references. Architecture doc must explicitly require ULID and show it in examples.
+- Worker concurrency and leasing:
+  - ADR-006’s claimJob does SELECT then UPDATE inside a transaction. With multiple processes, two workers can select the same row before either UPDATE commits. Must switch to the single-statement UPDATE ... WHERE status='queued' AND run_at<=now ORDER BY priority, run_at LIMIT 1 RETURNING approach and include locked_by (worker id).
+- Graceful shutdown incompleteness:
+  - Examples reference worker.waitForCompletion() which is undefined. Document and implement a definitive mechanism to:
+    - Track current job
+    - Wait with timeout or extend/renew lease on long jobs
+    - Release locks (or rely on stale lock reclamation) deterministically
+- Upload status vocabulary:
+  - STANDARDS says uploads should use the canonical enum, whereas reference schema uses domain-specific statuses (pending/ipfs_uploaded/tx_submitted/confirmed/failed). Resolve this conflict. If keeping domain states, STANDARDS must be updated or add a mapping to canonical states for consistency.
+
+Alignment verification (canonical requirements)
+- Canonical job_queue table: FAIL (columns, timestamps, and claim pattern deviate in ADR-006; ensure architecture doc matches canonical schema with ISO timestamps, locked_at/locked_by, attempts, run_at).
+- Canonical status enums: FAIL at repo level (reference doc deviates); ADR-006 is OK. Architecture doc must use and enforce queued/in_progress/completed/failed/dead_letter only.
+- Privacy flow (no raw persistence, pre-sanitize in hook): FAIL (ADR-006 implies async sanitization and references raw content in DB). Architecture doc must reflect pre-sanitization before persistence and remove any raw-content-at-rest flows.
+- ULID usage: FAIL (not explicitly required in ADR-006 examples). Architecture doc must mandate ULID.
+- ISO-8601 timestamps: FAIL (epoch integers used in ADR-006 examples). Architecture doc must use ISO-8601.
+
+Suggestions for improvement
+- Worker/lease model:
+  - Adopt canonical dequeue: single UPDATE ... WHERE status='queued' AND run_at<=now ORDER BY priority, run_at LIMIT 1 RETURNING *; increment attempts on claim; set locked_at and locked_by.
+  - Add release-stale mechanism based on locked_at + timeout, and optionally a heartbeat to renew locks for long-running jobs.
+  - Clarify concurrency: if MVP is single worker, state that; if “independent processes” are supported, ensure atomic claim and stale lock handling are robust.
+- Backoff and retries:
+  - Keep exponential backoff and add full jitter (e.g., AWS “full jitter” algorithm) and max cap. Classify retryable vs non-retryable errors to avoid wasting attempts.
+  - Persist next run time in run_at (ISO string) and index on (status, priority, run_at).
+- Indexing:
+  - Align indexes with dequeue query. Use partial index: CREATE INDEX idx_job_queue_dequeue ON job_queue(priority, run_at) WHERE status='queued'.
+  - Keep idx_job_queue_type and created_at DESC as in the reference for observability.
+- Idempotency:
+  - If retaining idempotency_key, propose adding it to the canonical schema and document ON CONFLICT(idempotency_key) DO NOTHING for dedupe on enqueue.
+  - Require handlers to be idempotent and define external effect reconciliation (e.g., check upload by CID/tx hash before re-submission).
+- Metrics:
+  - Replace AVG/MAX with actual percentile approximation for p95 latency (e.g., t-digest or windowed histograms in memory paired with persisted aggregates).
+  - Define SLIs/SLOs (queue depth, age, success rate) and alert thresholds.
+- Documentation hygiene:
+  - Remove “Event Queue” terminology and any event_queue table references.
+  - Show .claude/hooks.json, compiled .js hooks, and the pre-sanitization-in-hook step aligned with STANDARDS.
+  - Replace Date.now() with new Date().toISOString() consistently in examples.
+  - State ULID usage explicitly in all examples.
+  - Ensure no chain-of-thought capture anywhere.
+- Upload lifecycle:
+  - If keeping domain-specific upload states, document a mapping to canonical enums (e.g., running → in_progress, succeeded → completed) or revise STANDARDS to allow domain state machines separate from job status.
+
+Next steps
+- Provide docs/architecture/architecture-async-processing-2025-01-16.md content so I can verify line-by-line. Meanwhile:
+  - Update architecture doc to align with STANDARDS on privacy flow, canonical enums, ULID, and ISO timestamps.
+  - Align job_queue schema and worker logic to the canonical pattern and remove SELECT-then-UPDATE claims.
+  - Remove any implication of storing raw content or an event_queue.

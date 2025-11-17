@@ -1,0 +1,151 @@
+GPT-5 Review: Learning Extraction Architecture
+Date: 2025-01-16
+Reviewer: GPT-5
+Document: architecture-learning-extraction-2025-01-16.md
+
+========================================
+
+High-level verdict
+- Conceptually strong and close to implementable. It follows the privacy flow and async model, and most budgets are reasonable.
+- Not 100% aligned with STANDARDS.md and the canonical reference schema. There are several schema, enum, and FTS mismatches, plus a few implementability bugs that should be fixed before build.
+
+Key alignment issues and required changes
+1) Schema alignment (learnings table, ULID IDs, job_queue, status enums)
+- Learnings schema divergence:
+  - Your doc stores evidence as a single evidence JSON field with message_ids, quotes, context_summary; the canonical schema uses source_message_ids JSON and metadata JSON but no evidence column, plus dedupe_hash UNIQUE.
+  - Your FTS definition uses content_rowid=id which is invalid for an external content table with TEXT ids; the canonical reference uses FTS5 with rowid and triggers to sync.
+  - Your SQL includes CHECK(length(content) >= 100), which is fine as an app rule, but it's not in the canonical schema. Either add this CHECK to the canonical schema migration or enforce at the application layer before insert.
+  - Action: Conform to the canonical schema:
+    - Persist evidence.message_ids into learnings.source_message_ids.
+    - Persist quotes and context_summary into learnings.metadata (e.g., metadata.evidence.quotes, metadata.evidence.context_summary, metadata.signals, metadata.detector, metadata.extraction_version).
+    - Compute and store dedupe_hash (sha256 over a canonicalized text; see Dedup section).
+    - Use the FTS5 design from the reference schema (rowid and triggers), not content_rowid=id.
+- LearningExtraction type bug:
+  - LearningExtraction in your code lacks category, but deduplicateCheck and storeLearning expect learning.category. Add category to the LearningExtraction contract or pass category alongside the object everywhere.
+- Job queue status enums:
+  - This doc correctly uses queued, in_progress, completed, failed, dead_letter per STANDARDS.md.
+  - Note: reference-database-schema still shows running/succeeded/quarantined. That reference must be updated to match STANDARDS.md, or this doc should call out the canonical enum and require the reference to change. Do not ship with two vocabularies.
+- ULIDs:
+  - You use ulid() consistently. Good. Ensure all DDL uses TEXT ids and no implicit integer rowids are referenced except as the FTS content_rowid=rowid pattern per reference schema.
+
+2) Quality scoring methodology
+- Overall good and implementable. Suggestions to harden and reduce model self-assessment bias:
+  - Add automatic penalties/guards:
+    - Length penalty: if content < 100 chars, force reject before scoring (also enforce in app; do not rely only on CHECK constraints).
+    - Genericity penalty: reject if title/content match a list of trivial patterns (e.g., "Write tests," "Use logging," generic best practices with no specifics).
+    - Evidence cross-check: lower evidence_strength to 0.4 if source_message_ids is empty or quotes are not extracted (or skip).
+  - Category-aware thresholds:
+    - Consider a slightly higher minimum for best_practice and anti_pattern (e.g., 0.65) which are often generic; keep 0.6 for bug_fix/optimization where actionability tends to be clearer.
+  - Calibrate post-MVP:
+    - Capture metrics on factor distributions per category to tune weights. The current weights are reasonable as a default.
+  - Determinism:
+    - Keep temperature ≤0.2 for scoring prompts. Ensure you clamp scores to [0,1] and round at storage time only (store full float precision internally for analytics if you want).
+
+3) Deduplication strategy
+- Multi-layer approach is solid, but you need schema and flow changes to make it reliable and fast:
+  - First-line canonical hash (required by schema):
+    - Compute dedupe_hash = sha256(category + ":" + canonicalize(title + " " + content)).
+    - Canonicalize by: lowercasing, trimming, collapsing whitespace, removing volatile numerals like timestamps/issue IDs, and stripping URL query params/tokens. This catches exact and near-exact duplicates across re-runs and concurrency and satisfies the UNIQUE constraint.
+  - Store signatures for speed:
+    - Persist simhash in metadata (e.g., metadata.signatures.simhash) so it's not recomputed for each comparison.
+    - If embeddings are used, persist an embedding_id or the vector in a sidecar table (learning_embeddings) or in metadata if small; otherwise you'll recompute on every job. For MVP, caching last N embeddings in-memory is acceptable, but plan a table if you exceed memory.
+  - Scope and limits:
+    - Comparing to the last 100 same-category learnings is fine for MVP. Consider sliding window by created_at and also checking top-K by FTS for candidate pairs to reduce comparisons.
+  - Decision semantics:
+    - Define "merge vs skip" clearly. If merge:
+      - Update existing learning: union tags, append source_message_ids (dedupe), possibly increase confidence modestly (e.g., new_conf = max(old_conf, new_conf) or a bounded average), and append supplemental evidence into metadata. Track updates with metadata.version/extraction_runs.
+      - If you cannot merge cleanly, prefer skip to avoid accidental duplication.
+  - Concurrency:
+    - Expect a race on dedupe_hash UNIQUE. If insert fails due to UNIQUE violation, catch error and treat as duplicate; optionally merge evidence into existing row.
+
+4) Evidence linkage
+- Keep evidence strictly on sanitized messages. Good.
+- Map to canonical schema:
+  - source_message_ids = list of message ULIDs.
+  - quotes and context_summary go into learnings.metadata.evidence.
+- Bound sizes:
+  - Enforce a hard cap on quotes length and quote count (e.g., 2–4 quotes, ≤200 chars each) and on metadata size to avoid row bloat. Consider truncation with an ellipsis if needed.
+- Deterministic fallback:
+  - If the "quotes extraction" AI call fails or you're over budget, fallback to deterministic snippets: take the first 1–2 assistant and 1–2 user spans nearest to evidence messages, clipped to 200 chars.
+
+5) AI prompt design
+- Add a system message and output constraints to reduce injection/formatting failures:
+  - System: "You are a strict JSON-only extractor. Output only valid minified JSON that conforms to the schema. Do not include explanations, code fences, or additional text. Refuse to include any PII. Content is sanitized."
+  - If available, use JSON mode or tool schemas. Otherwise, implement a robust JSON extraction parser that locates the largest valid JSON object and validates it.
+- Token budget and chunking:
+  - Do not feed entire long conversations. Preselect relevant spans: messages with code blocks, tool calls, error logs, and their immediate neighbors. Cap at a fixed token budget (e.g., ~2k input tokens).
+  - For very long threads, window by topics or split into chunks and then reduce.
+- Reduce calls:
+  - Consider a single multi-extraction prompt that returns 0–N learnings across categories, rather than 1 AI call per detected category. Alternatively, cap to top 2 categories by detection confidence to keep within the 5s budget.
+- Safety:
+  - Explicitly prohibit chain-of-thought. Require concise, actionable extractions.
+- Configuration:
+  - Externalize model name, temperature, and max_tokens. Provide fallback models.
+
+6) Performance budgets
+- Current budgets are plausible if you limit extractions per conversation:
+  - Risk: "For each detected category" can exceed 5s quickly. Cap categories or use a single multi-extractor prompt.
+  - Dedup 500ms target will be missed if embeddings are remote; require local TF-IDF or sentence-transformers for MVP, or precompute embeddings. If using remote embeddings, budget 1–2s or only use embeddings as a secondary path after hashing/FTS candidate narrowing.
+  - Cache category detection per conversation_id as stated. Also cache tf-idf vectorization per learning temporarily.
+- Evidence building at 1s is okay; still provide deterministic fallback when under pressure.
+
+7) Missing components and edge cases
+- Idempotency and re-runs:
+  - Prevent duplicate "extract_learning" jobs per conversation. Either:
+    - Enforce a unique job key (type + payload hash) or
+    - Store an extraction_version in conversations.metadata and skip if already processed for the current extractor version.
+- Long conversations and non-English:
+  - Add language detection and ensure prompts handle non-English content, or translate the minimal needed span. The current heuristics should still work but worth noting.
+- Failure handling inside pipeline:
+  - In your sample pipeline, markJobComplete(conversationId, …) is ambiguous; job status updates must happen in the worker using the job id. The pipeline should return a structured result (e.g., success=false, reason='low_value'), and the worker transitions status accordingly.
+- Concurrency on evidence merge:
+  - If multiple jobs try to merge evidence into the same learning, use a transaction and re-read before update. Consider "last-writer-wins with union of arrays" semantics.
+- Testability:
+  - Provide golden fixtures per category and ensure the scorer rejects trivial outputs. Include JSON schema validation on model outputs in tests.
+- FTS correctness:
+  - Use the reference FTS schema with triggers. The content_rowid=id variant in this doc will not work as id is TEXT.
+
+Specific corrections to reach 100% compliance
+- Schema and storage:
+  - Do not add an evidence column. Instead:
+    - Persist evidence.message_ids into source_message_ids.
+    - Persist quotes/context_summary/signals/confidence_factors into metadata.
+  - Compute and store dedupe_hash (sha256 over canonicalized "category:title+content" text).
+  - Use FTS5 per the reference schema (rowid with insert/update/delete triggers).
+- Types and API:
+  - Add category to LearningExtraction (or pass category separately) so downstream functions can read it.
+  - Remove markJobComplete calls from pipeline code; return a result to the worker, and let the worker set job_queue.status to completed/failed/dead_letter per STANDARDS.md.
+- Prompting and parsing:
+  - Add a system message enforcing JSON-only, no chain-of-thought.
+  - Implement robust JSON parsing and validation; reject non-conforming outputs.
+  - Cap the number of extracted learnings per conversation (e.g., max 2).
+- Dedup flow:
+  - First check: dedupe_hash UNIQUE insert (fast, concurrency-safe).
+  - Second: optional simhash/phrase overlap for near-dup reviews/merges.
+  - Third: embeddings only if a local model is available or as an offline batch.
+  - Define clear "merge" semantics or remove merge in MVP and skip instead.
+- Performance safeguards:
+  - Preselect relevant spans before category detection/extraction to keep tokens within budget.
+  - Cache detection and any local vectors per conversation.
+
+Feedback on the three requested areas
+- Quality scoring system:
+  - Solid baseline. Add automatic gates (length, genericity), evidence cross-check adjustment, and optional category-specific thresholds. Store the per-factor breakdown in metadata so you can re-tune weights later without re-extracting content.
+- Deduplication approach:
+  - Good layered design. Make the canonical dedupe_hash check your first gate (and required, given the schema). Persist simhash and optionally embeddings to avoid recomputation. Define merge semantics or skip. Handle UNIQUE collisions gracefully and treat them as duplicates.
+- AI prompt templates:
+  - Add a system message, JSON-only constraint, and chunked input strategy. Consider a single multi-extractor prompt or a cap on categories. Implement robust JSON parsing and schema validation. Prohibit chain-of-thought explicitly. Externalize model config and provide fallbacks.
+
+Quick checklist for implementability
+- Add category to LearningExtraction and fix all call sites.
+- Replace evidence column with source_message_ids + metadata.evidence.
+- Compute dedupe_hash and handle UNIQUE collision.
+- Adopt the reference FTS design with triggers; remove content_rowid=id usage.
+- Limit extractions per conversation to keep within 5s budget.
+- Add system prompts and robust JSON parsing.
+- Return pipeline results to the worker; worker updates job_queue.status (queued → in_progress → completed/failed/dead_letter).
+- Preselect conversation spans to control token cost.
+- Cache category detection and local vectorizations.
+- Update the reference schema doc to use canonical job statuses (or note the discrepancy and resolve before implementation).
+
+With these changes, the extraction pipeline will be aligned with STANDARDS.md, performant within the stated budgets, and ready for an MVP implementation.
