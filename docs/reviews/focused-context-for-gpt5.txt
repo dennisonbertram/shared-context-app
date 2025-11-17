@@ -1,0 +1,3014 @@
+# Global Context Network - Project Standards
+
+> **CRITICAL**: All documentation and code MUST follow these standards to ensure consistency across the entire system.
+
+---
+**Date**: 2025-01-16
+**Status**: CANONICAL - These are the single source of truth for all project standards
+**Authority**: Established from review feedback (GPT-5, Gemini 2.5 Pro) to resolve contradictions
+
+---
+
+## 1. Privacy & Data Flow Standard (MOST CRITICAL)
+
+### Rule: NEVER Persist Raw Data
+
+**Canonical Privacy Flow**:
+```
+User Input → Hook Receives Event (in-memory)
+           → Fast Pre-Sanitization (<50ms, rule-based)
+           → Persist ONLY Sanitized Content to Database
+           → Optional AI Validation (async, downstream)
+```
+
+**What This Means**:
+- ✅ **DO**: Pre-sanitize synchronously in hook using fast regex rules
+- ✅ **DO**: Only write sanitized content to disk (messages table)
+- ✅ **DO**: Use in-memory buffers if needed (exempt from persistence)
+- ❌ **NEVER**: Persist raw content to SQLite (not even temporarily)
+- ❌ **NEVER**: Write raw content to event_queue, events table, or any disk storage
+- ❌ **NEVER**: Log raw content before sanitization
+
+**Why**: Zero-trust PII handling. If raw data never touches disk, we can guarantee no PII leaks.
+
+---
+
+## 2. Schema Standard (CANONICAL)
+
+### Official Tables
+
+**Production Tables**:
+1. `conversations` - Conversation metadata
+2. `messages` - Individual messages (SANITIZED content only)
+3. `learnings` - Extracted insights
+4. `job_queue` - Async job processing
+5. `uploads` - Network upload status
+6. `sanitization_log` - Audit trail
+
+**Eliminated Tables**:
+- ❌ NO `events` table
+- ❌ NO `event_queue` table
+- **Rationale**: These implied raw content persistence. We write sanitized directly to `messages`.
+
+### Data Flow
+
+```
+Hook (sanitize) → messages table (sanitized content)
+                → job_queue (jobs for AI validation, learning extraction, upload)
+```
+
+---
+
+## 3. Status Enum Standard (CANONICAL)
+
+All async operations use this vocabulary:
+
+```typescript
+type JobStatus =
+  | 'queued'        // Initial state
+  | 'in_progress'   // Worker claimed
+  | 'completed'     // Succeeded
+  | 'failed'        // Failed but retriable
+  | 'dead_letter';  // Failed permanently
+```
+
+**Usage**:
+- `job_queue.status`: Uses this enum
+- Upload status: Uses this enum
+- Worker states: Uses this enum
+
+**Eliminated Alternatives**:
+- ❌ NO "pending/processing" (use queued/in_progress)
+- ❌ NO "running/succeeded" (use in_progress/completed)
+- ❌ NO "quarantined" (use dead_letter)
+
+---
+
+## 4. ID Strategy Standard (CANONICAL)
+
+### Use ULID Globally
+
+```typescript
+import { ulid } from 'ulid';
+
+// All IDs use ULID
+const conversationId = ulid(); // Lexicographically sortable, chronological
+const messageId = ulid();
+const learningId = ulid();
+```
+
+**Why ULID over UUID**:
+- Chronologically sortable
+- Lexicographic ordering matches creation time
+- No need for separate timestamps in indexes
+- Better database index performance
+
+**Eliminated**: UUID v4 (not sortable)
+
+---
+
+## 5. Hook Configuration Standard (CANONICAL)
+
+### Config File Path
+```
+.claude/hooks.json
+```
+**NOT**: `.claude/hooks/hooks.json` (eliminated)
+
+### Hook IO Method
+```typescript
+// Hooks receive events via stdin (JSON)
+const event = JSON.parse(await readStdin());
+```
+**NOT**: `process.argv` (eliminated)
+
+### Hook Format
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
+    "Stop": ".claude/hooks/dist/stop.js"
+  }
+}
+```
+
+**CRITICAL**:
+- ✅ Point to compiled `.js` files (in `dist/` or `build/`)
+- ❌ NEVER use ts-node at runtime (too slow for <100ms budget)
+- ✅ Build step: `tsc` compiles TypeScript to JavaScript
+- ✅ Hooks run compiled JS only
+
+---
+
+## 6. Chain-of-Thought Standard (CANONICAL)
+
+### Rule: NEVER Capture Chain-of-Thought
+
+**What We Capture**:
+- ✅ User prompts
+- ✅ Assistant responses (visible output)
+- ✅ Tool calls and results
+- ✅ File operations
+- ✅ Error messages
+
+**What We NEVER Capture**:
+- ❌ Hidden chain-of-thought (internal reasoning)
+- ❌ "Thinking" blocks (if present)
+- ❌ Internal model reasoning traces
+
+**Why**:
+1. Provider policy compliance
+2. Privacy concerns
+3. No reliable access anyway (Claude Code doesn't expose it)
+
+**Action**: Remove all references to "thinking processes" or "reasoning capture" from docs.
+
+---
+
+## 7. Timestamp Standard (CANONICAL)
+
+### Use ISO-8601 Strings
+
+```typescript
+// All timestamps in database
+created_at: '2025-01-16T12:00:00.000Z'  // ISO-8601 UTC string
+
+// Generated via:
+new Date().toISOString()
+```
+
+**Why**:
+- Human-readable
+- Standard format
+- Timezone-aware (always UTC with Z)
+- SQLite text column compatible
+
+**Eliminated**: Unix epoch milliseconds (not human-readable)
+
+---
+
+## 8. Import Standards
+
+### Performance Timing
+```typescript
+import { performance } from 'node:perf_hooks';
+
+const start = performance.now();
+// ... work ...
+const duration = performance.now() - start;
+```
+**NOT**: `performance.now()` without import (will error)
+
+### Database
+```typescript
+import Database from 'better-sqlite3';
+
+const db = new Database('context.db');
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
+```
+
+### IDs
+```typescript
+import { ulid } from 'ulid';
+
+const id = ulid();
+```
+
+---
+
+## 9. Sanitization Standard
+
+### Fast Pre-Sanitization (In Hook)
+
+**Budget**: <50ms (synchronous, rule-based)
+
+**What to Redact**:
+1. API keys (OpenAI, Anthropic, AWS, Google, GitHub, etc.)
+2. Absolute file paths with usernames
+3. Email addresses
+4. IP addresses
+5. Phone numbers
+6. URLs with tokens/secrets
+7. JWT tokens
+8. Environment variable values
+9. SSH keys, PEM blocks
+10. Credit card numbers, SSNs
+
+**Redaction Format**:
+```typescript
+"[REDACTED_API_KEY]"
+"[REDACTED_EMAIL]"
+"[REDACTED_PATH]"
+"[REDACTED_IP]"
+```
+
+**Pseudonymization** (optional, session-scoped):
+```typescript
+"<EMAIL_1>", "<EMAIL_2>"  // Same email = same placeholder within session
+"<PATH_1>", "<PATH_2>"    // Same path = same placeholder
+```
+
+### AI Validation (Async, Downstream)
+
+**Budget**: <2s per conversation (async job)
+
+**Purpose**:
+- Catch context-aware PII (names that look like variables)
+- Validate pre-sanitization caught everything
+- Handle edge cases
+
+**Not a replacement**: AI runs AFTER pre-sanitization, not instead of.
+
+---
+
+## 10. File Path Standards
+
+### Hook Scripts
+```
+.claude/hooks/
+  src/
+    userPromptSubmit.ts
+    stop.ts
+  dist/              # Compiled output
+    userPromptSubmit.js
+    stop.js
+  tsconfig.json
+  package.json
+```
+
+### Project Structure
+```
+docs/
+  architecture/
+  decisions/
+  plans/
+  guides/
+  reference/
+  learnings/
+  reviews/
+src/
+  hooks/
+  sanitization/
+  learning/
+  mcp/
+  database/
+tests/
+  unit/
+  integration/
+  e2e/
+```
+
+---
+
+## 11. Testing Standards
+
+### Coverage Requirements
+- **Global**: ≥85% line coverage
+- **Critical paths** (sanitization, hooks): ≥95% line + branch coverage
+- **Learnings extraction**: ≥80%
+
+### Test Types
+- **70% Unit tests**: Isolated, fast, mocked
+- **20% Integration tests**: Component interactions
+- **10% E2E tests**: Full workflows
+
+### Naming
+```typescript
+describe('sanitizeContent', () => {
+  it('should redact API keys', () => {
+    // arrange
+    const input = 'key: sk-1234567890';
+
+    // act
+    const result = sanitizeContent(input);
+
+    // assert
+    expect(result).toBe('key: [REDACTED_API_KEY]');
+  });
+});
+```
+
+---
+
+## 12. Performance Budgets
+
+| Component | Budget | Measurement |
+|-----------|--------|-------------|
+| Hook execution | <100ms p95 | End-to-end (receive → sanitize → persist) |
+| Fast sanitization | <50ms p95 | Regex-based rules only |
+| Database writes | <20ms p95 | WAL-mode insert |
+| Database queries | <100ms p95 | Indexed lookups |
+| MCP queries | <200ms p95 | Search + serialization |
+| AI sanitization | <2s p95 | Claude API call |
+| Learning extraction | <5s p95 | Claude API call |
+
+---
+
+## 13. Error Handling Standards
+
+### Hooks
+```typescript
+try {
+  // Hook work
+} catch (error) {
+  // NEVER throw or block user
+  logger.error('Hook failed', { error, event });
+  // Fail silently
+}
+```
+
+### Workers
+```typescript
+// Retry with exponential backoff
+const maxAttempts = 3;
+for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  try {
+    await processJob(job);
+    break;
+  } catch (error) {
+    if (attempt === maxAttempts) {
+      await moveToDeadLetter(job, error);
+    } else {
+      await sleep(2 ** attempt * 1000);
+    }
+  }
+}
+```
+
+---
+
+## 14. Logging Standards
+
+### Structured Logging
+```typescript
+logger.info('Event captured', {
+  conversation_id: conversationId,
+  message_id: messageId,
+  role: 'user',
+  content_length: sanitizedContent.length,  // NEVER log raw content
+  duration_ms: duration
+});
+```
+
+### Privacy in Logs
+- ❌ NEVER log raw content
+- ❌ NEVER log PII before sanitization
+- ✅ Log sanitized content (optional, for debugging)
+- ✅ Log metadata (IDs, lengths, durations)
+
+---
+
+## 15. Blockchain Standard (Clarified)
+
+### EVM Chain Selection (Not Celestia)
+
+**For MVP**:
+- Target: Ethereum L2 (Base, Arbitrum, Optimism, or Polygon)
+- **NOT Celestia**: Celestia is data availability layer, not EVM-compatible
+
+**Celestia Usage** (optional, future):
+- Can use for data availability (content commitments)
+- Requires separate integration
+
+**Clarification**:
+- Smart contracts = EVM chain
+- Data availability = Celestia
+- Don't conflate the two
+
+---
+
+## 16. Consent & Licensing Standard
+
+### Default Behavior
+- **Default**: Local-only mode (no uploads)
+- **Opt-in required**: User must explicitly enable global sharing
+- **Manual approval gate**: Each upload requires confirmation (MVP)
+
+### License for Learnings
+- **Recommended**: CC BY 4.0 or ODC-By for shared learnings
+- **Prohibited**: Sharing raw conversations (only derived learnings)
+
+**ADR Required**: ADR-007 must formalize this
+
+---
+
+## 17. Documentation Standards
+
+### File Naming
+```
+category-topic-YYYY-MM-DD.md
+
+Examples:
+- architecture-sanitization-pipeline-2025-01-16.md
+- decision-use-ulid-2025-01-16.md
+- guide-hook-development-2025-01-16.md
+```
+
+### Frontmatter (Required)
+```yaml
+---
+title: Document Title
+category: architecture|decision|plan|guide|reference|learning
+date: 2025-01-16
+status: active|draft|archived
+authors: Name(s)
+tags: [tag1, tag2]
+---
+```
+
+### Cross-Linking
+- Always link to related docs in "Related Documents" section
+- Use relative paths: `../architecture/file.md`
+- Update category INDEX.md when adding files
+
+---
+
+## 18. Code Standards
+
+### TypeScript Strict Mode
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true
+  }
+}
+```
+
+### No `any` Types
+```typescript
+// ❌ BAD
+function process(data: any) { }
+
+// ✅ GOOD
+function process(data: unknown) {
+  if (typeof data === 'string') {
+    // Type guard
+  }
+}
+
+// ✅ BETTER
+interface EventData {
+  role: string;
+  content: string;
+}
+function process(data: EventData) { }
+```
+
+---
+
+## Enforcement
+
+### All New Documents MUST:
+1. Reference this STANDARDS.md file
+2. Use canonical schema (messages + job_queue)
+3. Use canonical status enums (queued → in_progress → completed → failed → dead_letter)
+4. Use ULID for all IDs
+5. Follow privacy flow (pre-sanitize, never persist raw)
+6. Exclude chain-of-thought universally
+7. Use .claude/hooks.json path
+8. Use compiled .js hooks
+9. Use ISO-8601 timestamps
+10. Follow performance budgets
+
+### Review Checklist
+
+Before any document is finalized:
+- [ ] Uses canonical schema (no events/event_queue tables)
+- [ ] Uses canonical status enums
+- [ ] Uses ULID for IDs
+- [ ] Pre-sanitizes in hook (never persists raw)
+- [ ] Excludes chain-of-thought
+- [ ] Uses .claude/hooks.json config path
+- [ ] References compiled .js hooks (not ts-node)
+- [ ] Uses ISO-8601 timestamps
+- [ ] Performance budgets specified
+- [ ] Privacy guarantees maintained
+
+---
+
+## Related Documents
+
+- [ADR-004: Sanitize Before Storage](./decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [Database Schema Reference](./reference/reference-database-schema-2025-01-16.md)
+- [Architecture: Hooks & Event Capture](./architecture/architecture-hooks-event-capture-2025-01-16.md)
+
+---
+
+*This document is the canonical source of truth for all project standards. When in doubt, refer here. If standards conflict with other docs, THIS document wins.*
+---
+title: ADR-004: Sanitize Before Storage (Privacy-First Architecture)
+category: decision
+date: 2025-01-16
+status: accepted
+deciders: Claude + Dennison
+tags: [privacy, security, pii, sanitization, zero-trust]
+---
+
+# ADR-004: Sanitize Before Storage (Privacy-First Architecture)
+
+## Status
+
+Accepted
+
+Date: 2025-01-16
+
+## Context
+
+The Global Context Network captures user conversations with AI agents, which inevitably contain:
+- **API keys and secrets** - Authentication tokens, passwords
+- **Personal information** - Names, emails, phone numbers
+- **File paths** - Absolute paths with usernames
+- **IP addresses** - Network information
+- **Organization-specific data** - Company names, project names
+- **URLs with tokens** - Authentication in query params
+
+This data will be:
+1. Stored locally in SQLite database
+2. Extracted for learning generation
+3. Potentially shared globally via IPFS/blockchain
+4. Queried by other AI agents via MCP
+
+**The Risk**: If PII is stored unsanitized, it can leak through:
+- Database breaches
+- Accidental sharing
+- Query results
+- Learning extractions
+- Global network uploads
+- Developer debugging
+- Log files
+
+**Data Minimization Principle**: The safest PII is PII we never store. Once stored, it can spread through the system unpredictably.
+
+**Zero-Trust Privacy**: We cannot trust that all downstream components will properly handle PII. The only safe approach is to never let PII enter storage.
+
+## Decision
+
+Sanitize ALL data BEFORE database insertion. Never store unsanitized conversation data.
+
+**Architecture**:
+```
+Event Capture → Sanitization Pipeline → Database
+                        ↑
+                  (PII never passes this gate)
+```
+
+**Sanitization happens**:
+- BEFORE any database write
+- In the event queue processing worker
+- Using hybrid detection (rules + AI)
+- With audit trail of all redactions
+
+**Sanitization methods**:
+1. **Rule-based detector** - Fast regex for known patterns
+2. **AI-powered detector** - Context-aware LLM analysis
+3. **Hybrid validator** - Combines both approaches
+4. **Audit logger** - Tracks what was redacted
+
+**Redaction format**:
+- Irreversible redaction by default
+- Placeholder tokens: `<EMAIL_1>`, `<API_KEY_1>`, `<PERSON_1>`
+- Optional per-session pseudonymization for within-session linking
+- Separate encrypted mapping (if pseudonymization enabled)
+
+## Consequences
+
+### Positive
+
+- **Zero-trust PII handling** - Database inherently safe
+- **Safe default sharing** - No risk of accidental PII in learnings
+- **Breach impact minimized** - No PII to steal
+- **Compliance friendly** - Easier GDPR/CCPA alignment
+- **Developer safety** - Devs can access database without PII exposure
+- **Query safety** - MCP queries can't return PII
+- **Audit trail** - Full log of what was redacted
+
+### Negative
+
+- **Irreversible** - Can't recover original data if over-redaction occurs
+- **Async delay** - 1-2s sanitization delay before storage
+- **False negatives risk** - May miss novel PII patterns
+- **Utility loss** - Over-redaction reduces learning value
+- **Complexity** - Hybrid pipeline is more complex than simple storage
+
+### Neutral
+
+- **Processing overhead** - Sanitization adds computational cost
+- **Confidence thresholds** - Must tune detection sensitivity
+- **Review workflow** - Borderline cases need manual review
+- **Detector maintenance** - Must update PII patterns over time
+
+## Alternatives Considered
+
+### Alternative 1: Sanitize on Query
+
+**Description**: Store raw data, sanitize when querying.
+
+**Pros**:
+- Can recover original data if needed
+- Simpler storage path
+- Faster writes
+
+**Cons**:
+- **Database contains PII** - Breach exposes everything
+- **Too late** - PII already persisted and spread
+- **Query bugs leak PII** - One bug exposes all data
+- **Compliance risk** - Storing PII requires strict controls
+- **Multiple sanitization points** - Must sanitize every query path
+
+**Why not chosen**: Violates zero-trust principle. Database breach or query bug exposes all PII.
+
+### Alternative 2: Sanitize on Upload Only
+
+**Description**: Store raw locally, sanitize only for global sharing.
+
+**Pros**:
+- Local utility preserved
+- Only sanitize what's shared
+- Can debug with full data
+
+**Cons**:
+- **Local database contains PII** - User machine breach exposes PII
+- **Accidental sharing risk** - One bug uploads raw data
+- **Developer access risk** - Devs see PII during debugging
+- **Log leakage** - Logs may contain PII
+- **MCP queries return PII** - Agents see raw data
+
+**Why not chosen**: Too many opportunities for PII leakage. Doesn't minimize data surface area.
+
+### Alternative 3: Trust Users to Redact
+
+**Description**: Provide UI for users to review and redact before storage.
+
+**Pros**:
+- User control
+- High precision (users know what's sensitive)
+- No false positives
+
+**Cons**:
+- **Users make mistakes** - Will forget to redact
+- **Poor UX** - Friction on every interaction
+- **Incomplete coverage** - Users miss subtle PII
+- **Not scalable** - Can't review every conversation
+
+**Why not chosen**: Users are not reliable. Automated approach required.
+
+### Alternative 4: Encryption Only (No Redaction)
+
+**Description**: Encrypt sensitive data, don't redact.
+
+**Pros**:
+- Reversible
+- Data preserved
+- Simple implementation
+
+**Cons**:
+- **Key management complexity** - Where to store keys?
+- **Still have access to raw data** - Can decrypt when needed
+- **Doesn't minimize surface** - PII still in system
+- **Compliance unclear** - Encrypted PII may still be PII
+- **Key leak exposes all** - Single point of failure
+
+**Why not chosen**: Doesn't eliminate PII, just obscures it. Key management introduces new risks.
+
+### Alternative 5: Layered Detection (Rules + ML NER + LLM)
+
+**Description**: Use multiple detection layers: regex, ML NER models, LLM adjudicator.
+
+**Pros**:
+- Higher accuracy than single method
+- Catches different PII types
+- Reduces false negatives
+
+**Cons**:
+- More complex pipeline
+- Higher latency
+- More expensive (ML model + LLM calls)
+- More maintenance
+
+**Why not chosen**: **ACTUALLY CHOSEN** - This is the hybrid approach we're implementing (rules + LLM). Could add ML NER post-MVP for even better accuracy.
+
+## Implementation
+
+### PII Taxonomy
+
+Define what we detect:
+
+```typescript
+enum PIICategory {
+  API_KEY = "API_KEY",           // API keys, tokens, passwords
+  EMAIL = "EMAIL",               // Email addresses
+  PHONE = "PHONE",               // Phone numbers (all formats)
+  SSN = "SSN",                   // Social Security Numbers
+  CREDIT_CARD = "CREDIT_CARD",   // Credit card numbers
+  IP_ADDRESS = "IP_ADDRESS",     // IPv4/IPv6 addresses
+  MAC_ADDRESS = "MAC_ADDRESS",   // Hardware addresses
+  PERSON_NAME = "PERSON_NAME",   // Human names (not code names)
+  FILE_PATH = "FILE_PATH",       // Absolute paths with usernames
+  URL_WITH_TOKEN = "URL_WITH_TOKEN", // URLs with auth params
+  AWS_KEY = "AWS_KEY",           // AWS access keys
+  PRIVATE_KEY = "PRIVATE_KEY",   // SSH/TLS private keys
+  JWT = "JWT",                   // JSON Web Tokens
+  ORGANIZATION = "ORGANIZATION"  // Company/org names
+}
+```
+
+### Detection Patterns
+
+```typescript
+const piiPatterns = {
+  EMAIL: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+  PHONE: /\b(\+\d{1,3}[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b/g,
+  API_KEY: /\b(sk_live_|pk_live_|api_key_|apikey=)[A-Za-z0-9_-]{20,}\b/gi,
+  AWS_KEY: /\b(AKIA[0-9A-Z]{16})\b/g,
+  FILE_PATH: /\/Users\/[^\/\s]+\/.*|\/home\/[^\/\s]+\/.*/g,
+  URL_WITH_TOKEN: /https?:\/\/[^\s]+[?&](token|key|auth|api_key)=[^\s&]+/gi,
+  // ... more patterns
+};
+```
+
+### Layered Detection Pipeline
+
+```typescript
+interface SanitizationResult {
+  sanitized: string;
+  detections: Detection[];
+  confidence: number; // 0-1
+  method: "rules" | "ai" | "hybrid";
+}
+
+interface Detection {
+  category: PIICategory;
+  original: string;
+  placeholder: string;
+  confidence: number;
+  position: { start: number; end: number };
+  detector: "rules" | "ai";
+}
+
+async function sanitize(text: string): Promise<SanitizationResult> {
+  // Layer 1: Fast rule-based detection (< 10ms)
+  const ruleDetections = detectWithRules(text);
+
+  // Layer 2: AI-powered context-aware detection (< 2s)
+  const aiDetections = await detectWithAI(text, ruleDetections);
+
+  // Layer 3: Hybrid validator combines results
+  const allDetections = mergeDetections(ruleDetections, aiDetections);
+
+  // Layer 4: Apply redactions
+  const sanitized = applyRedactions(text, allDetections);
+
+  // Layer 5: Audit log
+  await logSanitization(text, sanitized, allDetections);
+
+  return {
+    sanitized,
+    detections: allDetections,
+    confidence: calculateConfidence(allDetections),
+    method: "hybrid"
+  };
+}
+```
+
+### Reversible Pseudonymization (Optional)
+
+For within-session linking:
+
+```typescript
+interface PseudonymizationMapping {
+  sessionId: string;
+  mappings: Map<string, string>; // original → placeholder
+  encrypted: boolean;
+  ttl: number; // Auto-delete after N seconds
+}
+
+// Per-session mapping stored separately with envelope encryption
+const sessionMapping = {
+  sessionId: "conv-123",
+  mappings: new Map([
+    ["user@example.com", "<EMAIL_1>"],
+    ["John Doe", "<PERSON_1>"]
+  ]),
+  encrypted: true,
+  ttl: 86400 // 24 hours
+};
+```
+
+### Confidence Thresholds
+
+```typescript
+interface SanitizationPolicy {
+  minConfidence: number; // 0.8 = require 80% confidence
+  reviewThreshold: number; // 0.6 = manual review if 60-80%
+  blockThreshold: number; // 0.0 = block if any PII detected
+
+  async handleBorderline(result: SanitizationResult): Promise<Action> {
+    if (result.confidence < this.minConfidence) {
+      if (result.confidence >= this.reviewThreshold) {
+        return "QUARANTINE_FOR_REVIEW";
+      } else {
+        return "BLOCK_STORAGE";
+      }
+    }
+    return "ALLOW_STORAGE";
+  }
+}
+```
+
+### Redaction Format with Entity Tags
+
+```typescript
+function applyRedactions(text: string, detections: Detection[]): string {
+  let sanitized = text;
+  const entityCounts = new Map<PIICategory, number>();
+
+  // Sort by position (reverse) to maintain indices
+  detections.sort((a, b) => b.position.start - a.position.start);
+
+  for (const detection of detections) {
+    // Increment counter for this entity type
+    const count = (entityCounts.get(detection.category) || 0) + 1;
+    entityCounts.set(detection.category, count);
+
+    // Generate placeholder
+    const placeholder = `<${detection.category}_${count}>`;
+
+    // Replace
+    sanitized =
+      sanitized.slice(0, detection.position.start) +
+      placeholder +
+      sanitized.slice(detection.position.end);
+  }
+
+  return sanitized;
+}
+```
+
+### Streaming Sanitization
+
+Avoid buffering raw content:
+
+```typescript
+async function* streamingSanitize(
+  eventStream: AsyncIterable<string>
+): AsyncGenerator<string> {
+  let buffer = "";
+
+  for await (const chunk of eventStream) {
+    buffer += chunk;
+
+    // Process complete sentences
+    const sentences = buffer.split(/[.!?]\s+/);
+    buffer = sentences.pop() || ""; // Keep incomplete sentence
+
+    for (const sentence of sentences) {
+      const { sanitized } = await sanitize(sentence);
+      yield sanitized + ". ";
+    }
+  }
+
+  // Process remaining buffer
+  if (buffer) {
+    const { sanitized } = await sanitize(buffer);
+    yield sanitized;
+  }
+}
+```
+
+### Evidence of Sanitization
+
+Store metadata with every record:
+
+```typescript
+interface SanitizationEvidence {
+  recordId: string;
+  timestamp: string;
+  detectorVersion: string; // "rules-v1.2 + ai-v2.0"
+  detectionsCount: number;
+  categoriesDetected: PIICategory[];
+  confidence: number;
+  reviewStatus: "auto" | "reviewed" | "quarantined";
+  auditor: string; // "automated" | "human-reviewer-id"
+}
+```
+
+### Right to Delete Process
+
+Even for sanitized data:
+
+```typescript
+async function handleDeletionRequest(userId: string, conversationId: string) {
+  // 1. Delete sanitized conversation
+  await db.conversations.delete({ id: conversationId });
+
+  // 2. Delete pseudonymization mappings
+  await db.pseudonymMappings.delete({ conversationId });
+
+  // 3. Delete derived learnings
+  await db.learnings.delete({ sourceConversationId: conversationId });
+
+  // 4. Add to revocation list for global network
+  await db.revocations.insert({
+    conversationId,
+    timestamp: new Date(),
+    reason: "user-requested-deletion"
+  });
+
+  // 5. If already uploaded, publish revocation
+  const upload = await db.uploads.findOne({ conversationId });
+  if (upload) {
+    await publishRevocation(upload.ipfsCid);
+  }
+}
+```
+
+### Post-Ingest Audits
+
+Continuous validation:
+
+```typescript
+async function runSanitizationAudit() {
+  // Randomly sample stored conversations
+  const samples = await db.conversations.sample(100);
+
+  for (const conv of samples) {
+    // Re-run detection on stored data
+    const { detections } = await sanitize(conv.sanitizedContent);
+
+    if (detections.length > 0) {
+      // Found PII in supposedly sanitized data!
+      await alert({
+        severity: "CRITICAL",
+        message: `PII found in stored conversation ${conv.id}`,
+        detections
+      });
+
+      // Quarantine
+      await db.conversations.update(conv.id, {
+        status: "QUARANTINED",
+        quarantineReason: "post-ingest-pii-detection"
+      });
+    }
+  }
+}
+
+// Run nightly
+schedule("0 2 * * *", runSanitizationAudit);
+```
+
+### Canary Scans
+
+Inject known PII to verify detection:
+
+```typescript
+const canaryTests = [
+  "My email is canary-test-001@example.com",
+  "API key: sk_test_canary_12345",
+  "My SSN is 123-45-6789",
+  // ... more canaries
+];
+
+async function runCanaryTest() {
+  for (const canary of canaryTests) {
+    const { detections } = await sanitize(canary);
+
+    if (detections.length === 0) {
+      await alert({
+        severity: "CRITICAL",
+        message: "Sanitization canary test failed",
+        canary
+      });
+    }
+  }
+}
+
+// Run on every deployment
+```
+
+## Risks and Mitigations
+
+### Risk: False Negatives (Missed PII)
+
+**Impact**: Critical - Privacy violation
+
+**Mitigation**:
+- Layered detection (rules + AI)
+- Post-ingest audits (random sampling)
+- Canary tests for known patterns
+- User reporting mechanism
+- Kill-switch for publishing if issues found
+- Continuous pattern updates
+
+### Risk: Over-Redaction (Utility Loss)
+
+**Impact**: Medium - Reduced learning value
+
+**Mitigation**:
+- Confidence thresholds (tune to balance precision/recall)
+- Context-aware AI detection (distinguish names from code)
+- Manual review queue for borderline cases
+- Feedback loop to improve detection
+- Metrics on redaction rate
+
+### Risk: Novel PII Patterns
+
+**Impact**: High - New PII types not detected
+
+**Mitigation**:
+- Continuous pattern updates
+- AI detection catches unknowns
+- User feedback
+- Regular security audits
+- Bug bounty for finding missed PII
+
+## Related Documents
+
+### Architecture
+- [Sanitization Pipeline Architecture](../architecture/architecture-sanitization-pipeline-2025-01-16.md)
+- [Global Context Network](../architecture/architecture-global-context-network-2025-01-16.md)
+
+### Decisions
+- [ADR-001: Use Claude Hooks](./decision-use-claude-hooks-2025-01-16.md)
+- [ADR-005: Use SQLite](./decision-use-sqlite-2025-01-16.md)
+
+### Plans
+- [Phase 2: Sanitization Pipeline](../plans/plan-phase-2-sanitization-2025-01-16.md)
+
+### Reference
+- [PII Detection Patterns](../reference/reference-pii-patterns-2025-01-16.md)
+Executive summary
+Overall, the documentation is ambitious, thorough, and generally well-structured. It lays out clear goals, strong privacy principles, a TDD-first approach, and a credible phased roadmap. The subagent/testing harness model and performance/quality gates are particularly strong. However, there are several cross-document contradictions (most critically around privacy and persistence), missing referenced documents, and a few technically risky or inconsistent implementation details (hooks IO, queue schemas, status enums, and UUID/ULID, etc.). These must be reconciled before implementation to avoid policy violations and rework.
+
+If the critical issues below are addressed and the single source-of-truth clarified, the docs will be implementation-ready.
+
+Critical issues (must fix before implementation)
+1) Privacy guarantee contradiction: “sanitize before storage” vs persisting raw events
+- Some docs (ADR-004, DB reference) mandate NEVER storing unsanitized data and show no “events” table.
+- Architecture-hooks doc shows persisting raw “content” to an events table and generating idempotency keys using raw content. The queue code also persists “content” before sanitization.
+- Guides (Phase 1) implement “fastSanitize” in the hook and then persist sanitized content. This is the correct direction but conflicts with other docs.
+Required fixes:
+- Make a single canonical policy: pre-sanitize synchronously in the hook (fast rules) and only ever persist sanitized text (then optionally run AI post-check downstream).
+- Remove or rewrite any code/docs that store raw content in SQLite. If a pre-sanitization ring buffer is needed, it must be memory-only and exempt from disk persistence.
+- Update all schemas and code samples to reflect “sanitized_content” (or “content” that is guaranteed sanitized) everywhere. Never show examples that write raw text to disk.
+
+2) Event/queue schema and naming drift (events vs event_queue vs job_queue)
+- Hooks/event-capture doc uses “events” table with pending/processing statuses; guides use “event_queue”; DB reference includes no events table at all; job_queue exists with a different status vocabulary (queued/running/succeeded/failed).
+Required fixes:
+- Publish one canonical schema: If keeping a persistent “event_queue”, add it to the Database Schema Reference, or replace with writing directly to “messages” (sanitized-only) and use job_queue for downstream work. Eliminate the “events” table entirely.
+- Unify status enums across the stack (recommend: queued → in_progress/running → completed/succeeded → failed → dead_letter/quarantined) and update all code/docs consistently.
+
+3) Hook interface, IO path, and performance budget inconsistencies
+- Some code reads JSON from stdin; other samples use process.argv; performance.now() used without perf_hooks import; hooks refer to both .claude/hooks.json and .claude/hooks/hooks.json; scripts are TypeScript ts-node shebangs (risky for <100ms budget).
+Required fixes:
+- Confirm the current Claude Code hook contract and standardize on one IO method (stdin) and one config path (choose .claude/hooks.json or .claude/hooks/hooks.json and stick to it).
+- Ship compiled Node JS hooks (no ts-node at runtime). Provide build steps and point hooks.json to .js scripts.
+- Use performance from node:perf_hooks and validate actual end-to-end timings with SQLite WAL writes in the hook budget.
+
+4) Chain-of-thought handling contradictions
+- Original vision suggests capturing “thinking processes”; later ADRs say to exclude chain-of-thought entirely, aligning with provider policy.
+Required fixes:
+- Make chain-of-thought exclusion universal and remove any earlier language that implies capturing hidden reasoning. Ensure all examples and schemas never include thinking fields.
+
+5) Missing referenced documents and broken cross-links
+- Architecture INDEX references missing files: architecture-sanitization-pipeline, learning-extraction, mcp-server, database-schema (as architecture doc).
+- Hooks doc references non-existent references (reference-event-schema, reference-hook-configuration). Database reference links to a guide not present (guide-database-setup).
+Required fixes:
+- Either add these docs or remove/update the references. Provide a single, authoritative “Sanitization Pipeline” and “Learning Extraction” architecture doc consistent with the current plan and schema.
+
+6) Identity and ordering inconsistencies (UUID vs ULID; sequence calculation location)
+- Some docs use uuid v4; others recommend ULID for sortable IDs. Sequence numbers are computed from the events table that may not exist.
+Required fixes:
+- Decide on ULID or UUID globally and document rationale (ULID recommended for chronological sorting).
+- If discarding the events table, define how message sequence is computed (e.g., per conversation increment in the messages table in a transaction), and update code samples.
+
+7) Security/consent/licensing gate before upload
+- Plans and ADRs note the need for consent/licensing ADR but it’s not finalized. Upload gating/opt-in is critical before any global distribution.
+Required fixes:
+- Add an ADR specifying consent, licensing, default opt-in status (default off), and manual approval gate. Ensure this is enforced in upload workers and MCP.
+
+Major improvements (should address soon)
+- Publish a single “Source-of-Truth Data Flow” diagram: Hook (pre-sanitize in <50ms) → persist sanitized to messages (or event_queue sanitized-only) → job_queue → sanitization AI validation (optional enhancements) → learnings → uploads (with manual approval).
+- Align all schema docs to match the canonical design (tables, indexes, constraints). Ensure the Database Schema Reference includes every referenced table (if event_queue stays, document it; otherwise remove event-table references).
+- Provide LLM prompt templates and operational guardrails for the AI sanitization and learning extractors (temperature, max tokens, retries, deterministic fixtures).
+- Finalize idempotency strategy that doesn’t depend on raw content (e.g., session_id + role + sequence + timestamp bucket), document it, and implement in examples.
+- Strengthen the PII taxonomy across all docs: unify the list (emails, phones, IPs, file paths, API keys, JWTs, URLs with tokens, names, SSNs, credit cards, etc.), match it in patterns, ADRs, and acceptance tests.
+- Document hook packaging and cross-platform instructions (Windows/macOS/Linux), including “no ts-node in production hooks” and verified install steps.
+- MCP server contract correctness: confirm return formats align with MCP SDK expectations (tools/resources schemas), and add example request/response payloads that validate with the SDK.
+
+Minor suggestions (nice to have)
+- Replace fragile regexes with named, reviewed patterns and benchmarks; add property-based tests for corner cases (already planned) and specify minimization of over-redaction in docs.
+- Normalize timestamp format across code (prefer ISO-8601 strings or ms since epoch; pick one and stick to it).
+- Clarify use of WAL in tests: :memory: databases don’t meaningfully benefit from WAL; avoid setting WAL in unit tests for in-memory DB.
+- Replace pseudo references to metrics.* with a minimal pluggable metrics abstraction and provide a no-op default.
+- Use consistent file paths and names for hooks config (.claude/hooks.json), guide references, and package scripts.
+- Add a brief operational runbook (how to restart workers, recover queues, apply migrations, backup/restore) and a cost/SLO budget table for Claude API use.
+
+What’s done exceptionally well
+- Clear, principled privacy stance (when consistently applied): zero-trust, sanitize-before-storage, audit trail, canary scans.
+- Strong TDD/quality gates: coverage targets, performance budgets, adversarial tests, property-based testing, and a Claude-powered test harness with MCP tooling.
+- Subagent architecture: specialization, parallelization, quality gating, and explicit prompts/configs are well-thought-out for velocity and quality.
+- Comprehensive plans and acceptance criteria across phases with explicit risks, mitigations, and success metrics.
+- Database reference (once aligned): good use of ACID, WAL, FTS5 for learnings, constraints, and triggers.
+
+Technical accuracy spot-checks
+- Hook samples should not rely on ts-node at runtime; compiled JS is needed to meet <100ms with SQLite I/O.
+- performance.now() requires node:perf_hooks import in Node.
+- Some sample code (generateIdempotencyKey, getNextSequence, metrics.*) omits imports/implementations; mark as pseudocode or provide concrete utilities.
+- WAL in in-memory tests is not meaningful; fine for file-backed tests.
+- MCP test-runner tool returns look reasonable but should be validated against the MCP SDK schemas and include examples of tool calls/results.
+
+Implementation readiness
+Medium. A developer can start Phase 0/1 using the guides, but ambiguity around pre-sanitization vs persisted raw events, queue schemas, and hook interface could cause rework and policy violations. Resolve the critical contradictions, unify schemas, and finalize hook packaging and IO, then proceed.
+
+Risk coverage
+Good breadth: PII leakage, performance regression, async reliability, chain-of-thought exclusion, and recovery paths are considered. The remaining gaps are consent/licensing ADR and the unresolved privacy persistence contradiction.
+
+Testability
+Strong. Clear budgets, coverage thresholds, deterministic fixture approach for LLMs, property-based/adversarial tests, and E2E flows via MCP are all in place. Add “privacy proof” suites that run canaries through the full ingest path to assert zero PII ends up on disk.
+
+Overall recommendation
+Not ready for implementation until the critical issues are addressed. After:
+- Unifying the dataflow (pre-sanitize in hook, never persist raw),
+- Harmonizing schemas/status enums, and
+- Fixing hook IO/packaging and missing docs,
+
+the documentation will be implementation-ready and well above average in quality.
+
+Concrete must-fix checklist (condensed)
+- Decide and document: event persistence model (remove raw, keep only sanitized).
+- Update all code/docs to a single schema set; add or remove “event_queue” consistently; remove any “events” table.
+- Unify status enums and ID strategy (use ULID or UUID everywhere; recommend ULID).
+- Standardize hooks IO (stdin), config path (.claude/hooks.json), and compiled JS deployment.
+- Publish missing docs or remove dead links (sanitization pipeline, learning extraction, MCP server, event schema, hook configuration, database-setup guide).
+- Add consent/licensing ADR and enforce manual approval gate prior to upload by default.
+# Global Context Network MVP: Comprehensive Review Analysis & Remediation Plan
+
+**Date:** 2025-01-16
+**Analyst:** Technical Architecture & Project Management Review
+**Source Reviews:**
+- GPT-5 Holistic Review: `docs/reviews/gpt5-holistic-review-2025-01-16.txt`
+- Gemini 2.5 Pro Holistic Review: `docs/reviews/gemini-holistic-review-2025-01-16.txt`
+- Documentation Analyzed: 126K tokens across 38 files
+
+---
+
+## Executive Summary
+
+Both GPT-5 and Gemini 2.5 Pro reviews converge on a critical assessment: **the project has exceptional architectural vision and documentation quality, but is not implementation-ready** due to critical contradictions, missing core documentation, and an unrealistic timeline.
+
+**Key Consensus:**
+- Documentation quality is world-class (structure, naming, consistency)
+- Privacy-first architecture is exemplary when consistently applied
+- Critical blocker: Privacy contradiction (sanitize before storage vs persisting raw events)
+- Critical blocker: Missing 4 core architecture documents
+- Timeline of 7-9 weeks is unrealistic; Gemini recommends 4-6 months
+- Hook performance budget (<100ms) is a major technical risk
+
+**Overall Verdict:** NOT READY for implementation until critical issues resolved.
+
+**Estimated Remediation Effort:** 3-4 weeks of focused documentation work + timeline restructuring
+
+---
+
+## Consensus Issues (Both Reviews Agree)
+
+### 1. Privacy Guarantee Contradiction (CRITICAL)
+
+**Problem:**
+- **ADR-004** and **DB Reference** mandate: NEVER store unsanitized data
+- **Architecture-Hooks** shows: persisting raw "content" to events table, generating idempotency keys from raw content
+- **Queue code samples** persist "content" before sanitization
+- **Phase 1 Guide** implements "fastSanitize" in hook (correct direction) but conflicts with other docs
+
+**Impact if Not Addressed:**
+- Policy violations (Anthropic usage policies)
+- Legal liability for PII storage
+- Complete architectural rework required mid-implementation
+- Trust violation with users
+
+**Remediation Steps:**
+1. **Establish Single Canonical Policy** (4 hours)
+   - Document decision: Pre-sanitize synchronously in hook (fast rules)
+   - Only persist sanitized text to any permanent storage
+   - Optional: AI post-check downstream for enhancement
+
+2. **Audit All Code Samples** (8 hours)
+   - Search for any code writing to "events" table with raw content
+   - Remove or rewrite to only persist sanitized_content
+   - Update all schema examples: `content` → `sanitized_content` (with column rename)
+
+3. **Update Referenced Documents** (6 hours)
+   - ADR-004: Add section 4.2 "Canonical Pre-Sanitization Flow"
+   - Architecture-Hooks: Remove raw content persistence, show sanitized-only
+   - DB Reference: Remove "events" table or update to sanitized-only schema
+   - Phase 1 Guide: Align with canonical flow
+
+4. **Memory-Only Ring Buffer (if needed)** (2 hours)
+   - Document: If pre-sanitization needs raw buffer, it must be memory-only
+   - Explicit policy: Memory buffers exempt from disk persistence guarantee
+   - Risk acceptance: Crash = data loss of in-flight events (acceptable)
+
+**Dependencies:** None (can start immediately)
+
+**Success Criteria:**
+- [ ] No code sample shows writing raw content to SQLite
+- [ ] ADR-004 section 4.2 defines canonical flow with diagram
+- [ ] All schemas use `sanitized_content` or equivalent
+- [ ] Grep search for "content" in storage context returns only sanitized references
+- [ ] Privacy canary test (raw PII) fails to persist to disk
+
+**Estimated Effort:** 20 hours (2.5 days)
+
+---
+
+### 2. Missing Core Architecture Documents (CRITICAL)
+
+**Problem:**
+Both reviews identified references to missing architecture documents:
+- `architecture-sanitization-pipeline-2025-01-16.md`
+- `architecture-learning-extraction-2025-01-16.md`
+- `architecture-mcp-server-2025-01-16.md`
+- `architecture-database-schema-2025-01-16.md` (reference exists, architecture version missing)
+- Referenced but non-existent: `reference-event-schema.md`, `reference-hook-configuration.md`, `guide-database-setup.md`
+
+**Impact if Not Addressed:**
+- Impossible to implement sanitization or learning extraction phases
+- Subagents lack specifications to work from
+- Integration contracts between components undefined
+- Rework required when gaps discovered during implementation
+
+**Remediation Steps:**
+
+#### 2.1 Create `architecture-sanitization-pipeline-2025-01-16.md` (16 hours)
+**Must Include:**
+- Component diagram: Hook → Pre-sanitizer → Event Queue → AI Validator → Messages
+- Pre-sanitization rules (fast, synchronous, regex-based)
+- AI validation rules (async, enhanced detection, prompts)
+- Data contracts at each stage
+- Performance budgets per stage
+- Error handling and quarantine flow
+- PII taxonomy (full list: emails, phones, IPs, paths, keys, JWTs, URLs with tokens, names, SSNs, credit cards)
+- Integration points with job queue
+- Success criteria: 98% precision, 95% recall
+
+**Dependencies:** Must resolve privacy contradiction first
+
+#### 2.2 Create `architecture-learning-extraction-2025-01-16.md` (12 hours)
+**Must Include:**
+- Input: Sanitized message sequences (conversations)
+- Processing pipeline: Conversation assembly → Pattern detection → Learning extraction → Validation
+- LLM prompt templates (temperature, max tokens, retries)
+- Learning schema and taxonomy
+- Quality gates (relevance, actionability, generalizability)
+- Deduplication strategy
+- Integration with job queue and storage
+- Success criteria per acceptance tests
+
+**Dependencies:** Requires sanitization pipeline to be defined
+
+#### 2.3 Create `architecture-mcp-server-2025-01-16.md` (10 hours)
+**Must Include:**
+- MCP SDK version and dependencies
+- Tool definitions (search, upload, token-balance)
+- Resource definitions (learnings, stats)
+- Request/response schemas with examples
+- Authentication and authorization model
+- Performance targets (<200ms for queries)
+- Error responses and codes
+- Integration with SQLite database
+- Contract validation against MCP SDK schemas
+
+**Dependencies:** Requires database schema to be finalized
+
+#### 2.4 Create `reference-event-schema.md` (4 hours)
+**Must Include:**
+- Canonical event/message schema
+- Field definitions and constraints
+- Relationship to messages table
+- Idempotency key generation (NOT using raw content)
+- Sequence number generation strategy
+- Example JSON payloads
+
+#### 2.5 Create `reference-hook-configuration.md` (4 hours)
+**Must Include:**
+- Canonical config path (.claude/hooks.json vs .claude/hooks/hooks.json)
+- Schema for hooks.json
+- IO contract (stdin JSON vs process.argv)
+- Performance monitoring configuration
+- Example configurations
+
+#### 2.6 Create `guide-database-setup.md` (6 hours)
+**Must Include:**
+- Installation prerequisites
+- Schema migration process
+- Initial data setup
+- WAL mode configuration
+- Backup and restore procedures
+- Testing database setup
+
+**Dependencies:** All documentation work (create or fix dead links)
+
+**Success Criteria:**
+- [ ] All 4 missing architecture docs created and reviewed
+- [ ] All dead links in architecture/INDEX.md resolved
+- [ ] Each doc includes component diagrams
+- [ ] Data contracts explicitly defined
+- [ ] Integration points with other components clear
+- [ ] Subagents can reference these docs for implementation
+
+**Estimated Effort:** 52 hours (6.5 days)
+
+---
+
+### 3. Event/Queue Schema and Naming Drift (CRITICAL)
+
+**Problem:**
+- **Hooks doc**: "events" table with pending/processing status
+- **Guides**: "event_queue" table
+- **DB Reference**: No events table at all
+- **Job queue**: Different status vocabulary (queued/running/succeeded/failed)
+- Inconsistent status enums across the stack
+
+**Impact if Not Addressed:**
+- Schema conflicts during implementation
+- Code references non-existent tables
+- Integration failures between components
+- Confusion for developers and subagents
+
+**Remediation Steps:**
+
+1. **Decide on Canonical Schema** (4 hours)
+   - Option A: Single "messages" table (sanitized-only) + job_queue for work
+   - Option B: "event_queue" (sanitized-only) → messages + job_queue
+   - **Recommendation:** Option A (simpler, fewer tables)
+
+2. **Unify Status Enums** (6 hours)
+   - Define canonical status flow: `queued → in_progress → completed → failed → dead_letter`
+   - Apply to job_queue consistently
+   - Remove any pending/processing/succeeded variants
+   - Update all code samples
+
+3. **Update Database Schema Reference** (8 hours)
+   - Remove or clearly define "events" table status
+   - Document event_queue if retained (with sanitized-only guarantee)
+   - Add all tables to single source of truth
+   - Include CREATE TABLE statements
+   - Document all indexes and constraints
+
+4. **Update All Code Samples** (8 hours)
+   - Search and replace status values
+   - Update table references
+   - Ensure schema consistency
+
+**Dependencies:** Resolving privacy contradiction
+
+**Success Criteria:**
+- [ ] Single canonical schema document
+- [ ] All status references use same enum
+- [ ] No references to undefined tables
+- [ ] CREATE TABLE statements execute without errors
+- [ ] Code samples reference only documented tables
+
+**Estimated Effort:** 26 hours (3.25 days)
+
+---
+
+### 4. Hook Performance Risk (<100ms budget) (MAJOR)
+
+**Problem:**
+- Sub-100ms budget is extremely tight
+- Current samples use ts-node (adds overhead)
+- performance.now() used without importing node:perf_hooks
+- SQLite WAL writes + regex sanitization must fit in budget
+- Any I/O contention violates budget
+
+**GPT-5 Concern:** "Risky for <100ms budget" with TypeScript runtime
+**Gemini Concern:** "Primary technical risk" and "very tight budget"
+
+**Impact if Not Addressed:**
+- Degraded user experience (Claude Code lags)
+- Hook might be disabled by Claude Code if too slow
+- Potential rejection by users
+
+**Remediation Steps:**
+
+1. **Mandate Compiled JavaScript** (2 hours)
+   - Document: Hooks MUST be compiled .js, not ts-node runtime
+   - Provide build steps in guide-database-setup.md
+   - Update hooks.json to point to .js scripts
+
+2. **Fix Performance Monitoring** (2 hours)
+   - Add import: `import { performance } from 'node:perf_hooks';`
+   - Update all code samples using performance.now()
+
+3. **Establish Performance Testing Protocol** (8 hours)
+   - Create benchmark suite for hook execution
+   - Test with SQLite WAL writes included
+   - Measure 95th percentile, not just mean
+   - Include realistic regex complexity
+   - Test on resource-constrained systems
+
+4. **Define Fast Sanitization Rules** (6 hours)
+   - Document maximum regex complexity allowed
+   - Set redaction patterns that fit budget
+   - Define fallback: if pre-sanitization risks timeout, log and pass-through
+   - Document trade-off: completeness vs speed
+
+5. **Add Hook Packaging Guide** (6 hours)
+   - Cross-platform build instructions (Windows/macOS/Linux)
+   - Verified install steps
+   - Performance validation checklist
+   - Troubleshooting guide
+
+**Dependencies:** Hook configuration reference must be complete
+
+**Success Criteria:**
+- [ ] All hook samples use compiled .js
+- [ ] Performance imports correct in all samples
+- [ ] Benchmark suite shows p95 < 80ms (20ms buffer)
+- [ ] Documentation includes "no ts-node in production" warning
+- [ ] Build and packaging guide complete
+
+**Estimated Effort:** 24 hours (3 days)
+
+---
+
+### 5. Data Licensing and Consent Model (CRITICAL)
+
+**Problem:**
+- Plan involves uploading to global, public IPFS network
+- **Zero documentation** on legal framework
+- No defined license for shared learnings (MIT? CC0? Proprietary?)
+- No IP ownership model (user? system? network?)
+- No user consent mechanism for global, irrevocable publication
+
+**Gemini Assessment:** "Exposes project and users to significant legal and ethical risks"
+
+**Impact if Not Addressed:**
+- Legal liability for unauthorized data publication
+- Violation of user trust
+- Potential GDPR/privacy law violations
+- Inability to launch Phase 4 (global network)
+
+**Remediation Steps:**
+
+1. **Create ADR-007: Data Licensing and Consent** (12 hours)
+   **Must Define:**
+   - License for shared learnings (recommend: CC0 or MIT)
+   - IP ownership model (recommend: user retains ownership, grants irrevocable license)
+   - User consent mechanism (explicit opt-in required)
+   - Default state: opt-out (local-only until user consents)
+   - Consent UI/flow (checkbox, legal language)
+   - Right to withdraw consent (learning remains published, but future uploads stop)
+   - Privacy policy implications
+
+2. **Implement Consent Gating** (8 hours)
+   - Add `user_consent_global_upload: boolean` to config
+   - Default: false
+   - Upload worker checks consent before IPFS push
+   - MCP tool enforces consent check
+   - Log consent status changes
+
+3. **Update Upload Approval Flow** (4 hours)
+   - Manual approval gate PLUS consent check
+   - Document approval criteria
+   - User notification of pending uploads
+
+4. **Legal Review Requirement** (0 hours for you, but document it)
+   - Document: ADR-007 requires legal counsel review before Phase 4
+   - Add to Phase 4 prerequisites
+
+**Dependencies:** None (critical path item)
+
+**Success Criteria:**
+- [ ] ADR-007 created with all sections complete
+- [ ] License choice documented with rationale
+- [ ] Consent mechanism designed and documented
+- [ ] Upload workers enforce consent check
+- [ ] Default is opt-out (safe)
+- [ ] Legal review prerequisite documented
+
+**Estimated Effort:** 24 hours (3 days)
+
+---
+
+### 6. Timeline Realism (CRITICAL)
+
+**Problem:**
+- Current plan: 7-9 weeks
+- **Gemini assessment:** "Unrealistic... more realistic would be 4-6 months"
+- **GPT-5 assessment:** "Not ready for implementation until critical issues addressed"
+
+**Underestimated Complexities:**
+1. **Subagent workflow overhead:** Novel methodology with steep learning curve, prompt engineering, debugging agents
+2. **Phase 2 sanitization:** 7-10 days to build 1000+ example dataset AND develop 98%/95% AI detector is "multi-week data science project"
+3. **Testing harness:** Building Claude-powered harness is "project on its own"
+4. **Missing architecture docs:** Cannot start implementation without them
+
+**Impact if Not Addressed:**
+- Missed deadlines and stakeholder frustration
+- Rushed implementation leading to quality issues
+- Burnout and team demoralization
+- Incomplete features or cut corners
+
+**Remediation Steps:**
+
+1. **Add Phase -1: Proof of Concept** (4-6 weeks)
+   - Validate subagent-driven development on single non-critical component
+   - Build and stabilize testing harness MVP
+   - Measure actual development velocity with subagents
+   - Assess prompt engineering overhead
+   - Deliverable: PoC report informing final methodology
+
+2. **Revise Phase Durations** (Based on PoC results)
+   - Phase 0 (Foundation): 2 weeks → 3 weeks
+   - Phase 1 (Event Capture): 2 weeks → 3 weeks
+   - Phase 2 (Sanitization): 7-10 days → 4 weeks (data science project)
+   - Phase 3 (Learning Extraction): 7-10 days → 3 weeks
+   - Phase 4 (Global Network): 7-10 days → 4 weeks (including legal review)
+   - Buffer: Add 2 weeks contingency
+
+3. **Updated Timeline**
+   - Phase -1 (PoC): 4-6 weeks
+   - Phase 0-4: 17 weeks
+   - Buffer: 2 weeks
+   - **Total: 23-25 weeks (5.5-6 months)**
+
+4. **Document Methodology Risks** (4 hours)
+   - Create risk register for subagent development
+   - Mitigation: PoC validation phase
+   - Fallback: Traditional development if subagents inefficient
+   - Success metrics for PoC phase
+
+**Dependencies:** Complete all missing architecture docs first
+
+**Success Criteria:**
+- [ ] PoC phase added to roadmap with clear deliverables
+- [ ] Phase durations revised based on realistic estimates
+- [ ] Total timeline: 5-6 months
+- [ ] Risk register created for novel methodology
+- [ ] Stakeholder buy-in on revised timeline
+
+**Estimated Effort:** 4 hours documentation + PoC execution
+
+---
+
+### 7. Chain-of-Thought Handling Contradiction (MAJOR)
+
+**Problem:**
+- **Original vision** (`plan-original-user-vision`): "ideally all of their thinking processes"
+- **Final decisions** (ADR, Phase 2): "Do NOT capture hidden chain-of-thought", "Chain-of-thought excluded from all storage"
+- Risk: Original non-compliant intent could influence development
+
+**Impact if Not Addressed:**
+- Potential policy violations
+- Confusion for developers
+- Accidental capture of restricted content
+
+**Remediation Steps:**
+
+1. **Update Original Vision Document** (2 hours)
+   - Add prominent disclaimer at top: "NOTE: Original vision included chain-of-thought capture. This was ruled non-compliant with Anthropic policy. Current design excludes all chain-of-thought. See ADR-XXX."
+   - Strikethrough or annotate references to "thinking processes"
+   - Link to final decision
+
+2. **Audit All Documents** (4 hours)
+   - Search for "chain-of-thought", "thinking", "reasoning"
+   - Ensure all references align with exclusion policy
+   - Remove any ambiguous language
+
+3. **Add to Privacy Canary Tests** (2 hours)
+   - Test case: Verify chain-of-thought never captured
+   - Use sample with visible thinking tags
+   - Assert: Tags not in stored data
+
+**Dependencies:** None
+
+**Success Criteria:**
+- [ ] Original vision document annotated with disclaimer
+- [ ] No documents suggest capturing chain-of-thought
+- [ ] Privacy tests include chain-of-thought exclusion
+- [ ] Grep search returns only exclusion references
+
+**Estimated Effort:** 8 hours (1 day)
+
+---
+
+## Unique Issues by Reviewer
+
+### GPT-5 Unique Concerns
+
+#### Identity Strategy Inconsistency (UUID vs ULID) (MAJOR)
+
+**Problem:**
+- Some docs use UUID v4
+- Others recommend ULID for sortable IDs
+- Sequence numbers computed from "events" table that may not exist
+
+**Remediation:**
+1. **Decide on ULID globally** (2 hours)
+   - Document rationale: Chronological sorting, k-sortable
+   - Update all code samples to use ULID
+   - Specify library: `ulid` npm package
+
+2. **Define Sequence Number Strategy** (4 hours)
+   - If events table removed: Compute per-conversation increment in messages table
+   - Use transaction for atomic read-increment-write
+   - Document in reference-event-schema.md
+   - Update code samples
+
+**Success Criteria:**
+- [ ] All ID generation uses ULID
+- [ ] Sequence strategy documented without relying on events table
+- [ ] Code samples updated
+
+**Estimated Effort:** 6 hours
+
+---
+
+#### Hook IO and Config Path Inconsistencies (MAJOR)
+
+**Problem:**
+- Some code reads JSON from stdin
+- Other samples use process.argv
+- Config path varies: `.claude/hooks.json` vs `.claude/hooks/hooks.json`
+
+**Remediation:**
+1. **Standardize on stdin JSON** (2 hours)
+   - Document IO contract in reference-hook-configuration.md
+   - Update all hook samples to read from stdin
+
+2. **Choose Single Config Path** (2 hours)
+   - Recommendation: `.claude/hooks.json` (simpler)
+   - Update all references
+   - Document in reference-hook-configuration.md
+
+**Success Criteria:**
+- [ ] All hooks read from stdin
+- [ ] Single config path documented and used
+- [ ] No samples use process.argv
+
+**Estimated Effort:** 4 hours
+
+---
+
+#### PII Taxonomy Incompleteness (MODERATE)
+
+**Problem:**
+- PII lists vary across documents
+- Missing comprehensive taxonomy
+
+**Remediation:**
+1. **Create Canonical PII Taxonomy** (6 hours)
+   - Unify list: emails, phones, IPs, file paths, API keys, JWTs, URLs with tokens, names, SSNs, credit cards, addresses, dates of birth, biometrics
+   - Document in architecture-sanitization-pipeline.md
+   - Reference from all ADRs and tests
+   - Match in regex patterns and AI prompts
+
+**Success Criteria:**
+- [ ] Single PII taxonomy document
+- [ ] All references use same list
+- [ ] Patterns and tests cover all categories
+
+**Estimated Effort:** 6 hours
+
+---
+
+### Gemini 2.5 Pro Unique Concerns
+
+#### Missing User Management & Configuration Layer (MAJOR)
+
+**Problem:**
+- No documentation on how users interact with system
+- No UI or CLI for viewing queue status, learnings, token balance
+- No settings management (upload approvals, sanitization strictness)
+
+**Remediation:**
+1. **Create `architecture-user-interface-2025-01-16.md`** (10 hours)
+   - CLI commands for status, configuration, monitoring
+   - MCP as primary interface (leverage existing plan)
+   - Configuration file schema
+   - User flows: opt-in, view learnings, approve uploads, check balance
+
+2. **Extend MCP Server Spec** (4 hours)
+   - Add configuration tools
+   - Add monitoring tools (queue depth, processing status)
+   - Add user preference tools
+
+**Success Criteria:**
+- [ ] User interface architecture documented
+- [ ] Configuration management specified
+- [ ] MCP tools extended for user operations
+
+**Estimated Effort:** 14 hours
+
+---
+
+#### Cost Analysis & Management (MODERATE)
+
+**Problem:**
+- No plan for monitoring or controlling Claude API costs
+- Sanitization and learning extraction will incur substantial costs
+
+**Remediation:**
+1. **Create Cost Model** (6 hours)
+   - Estimate tokens per conversation
+   - Calculate sanitization cost ($/conversation)
+   - Calculate learning extraction cost ($/learning)
+   - Project monthly costs for active user
+
+2. **Add Cost Controls** (4 hours)
+   - Token budget per user
+   - Rate limiting strategy
+   - Cost alerts
+   - Document in architecture-global-context-network.md
+
+**Success Criteria:**
+- [ ] Cost model documented with estimates
+- [ ] Budget and rate limiting specified
+- [ ] Monitoring plan in place
+
+**Estimated Effort:** 10 hours
+
+---
+
+#### Onboarding & Installation Guide (MODERATE)
+
+**Problem:**
+- System involves hooks, background services, database
+- No detailed installation guide
+
+**Remediation:**
+1. **Create `guide-installation-setup-2025-01-16.md`** (8 hours)
+   - Prerequisites checklist
+   - Step-by-step installation
+   - Hook compilation and configuration
+   - Service startup procedures
+   - Verification steps
+   - Troubleshooting common issues
+   - Cross-platform notes (Windows/macOS/Linux)
+
+**Success Criteria:**
+- [ ] Complete installation guide
+- [ ] Tested on all three platforms
+- [ ] Includes troubleshooting
+
+**Estimated Effort:** 8 hours
+
+---
+
+#### Meta-Testing Problem (MODERATE)
+
+**Problem:**
+- Strategy doesn't address testing the subagents themselves
+- How to verify test-generator-agent produces quality tests?
+
+**Remediation:**
+1. **Create `architecture-subagent-validation-2025-01-16.md`** (6 hours)
+   - Quality metrics for generated tests
+   - Manual review process for agent outputs
+   - Agent performance benchmarks
+   - Feedback loop for improving agents
+   - Acceptance criteria for agent deliverables
+
+**Success Criteria:**
+- [ ] Validation strategy for subagents documented
+- [ ] Quality gates defined
+- [ ] Review process specified
+
+**Estimated Effort:** 6 hours
+
+---
+
+## Prioritized Remediation Plan
+
+### Priority 1: Blockers (MUST FIX - Cannot proceed without)
+
+| Issue | Effort | Owner/Phase | Completion Criteria |
+|-------|--------|-------------|-------------------|
+| **1. Privacy Contradiction** | 20h (2.5d) | Documentation Lead | All schemas show sanitized-only; ADR-004 section 4.2 added; privacy canary test passes |
+| **2. Missing Architecture Docs (4 files)** | 52h (6.5d) | Architecture Team | All 4 docs created, reviewed, and linked from INDEX; data contracts defined |
+| **3. Schema & Naming Drift** | 26h (3.25d) | Database Lead | Single canonical schema; status enums unified; no undefined table references |
+| **4. Data Licensing & Consent ADR** | 24h (3d) | Legal/Policy Lead | ADR-007 complete; consent mechanism designed; default opt-out enforced |
+| **5. Timeline Restructuring** | 4h + 4-6 weeks PoC | PM/Tech Lead | PoC phase added; realistic 5-6 month timeline; stakeholder buy-in |
+
+**Total Priority 1 Effort:** 126 hours (15.75 days) + PoC phase
+**Critical Path:** Must complete 1-4 before implementation can start
+
+---
+
+### Priority 2: High Risk (Major issues, address before implementation)
+
+| Issue | Effort | Owner/Phase | Completion Criteria |
+|-------|--------|-------------|-------------------|
+| **6. Hook Performance Risk** | 24h (3d) | Performance Lead | Compiled JS mandate; benchmark suite shows p95 < 80ms; packaging guide complete |
+| **7. Chain-of-Thought Contradiction** | 8h (1d) | Documentation Lead | Original vision annotated; all refs aligned; privacy test added |
+| **8. Missing User Interface Spec** | 14h (1.75d) | Product Lead | User interface architecture doc created; MCP tools extended |
+| **9. UUID vs ULID Inconsistency** | 6h (0.75d) | Database Lead | ULID chosen; sequence strategy documented; samples updated |
+| **10. Hook IO/Config Standardization** | 4h (0.5d) | Hooks Lead | Stdin IO documented; single config path chosen; all samples aligned |
+
+**Total Priority 2 Effort:** 56 hours (7 days)
+
+---
+
+### Priority 3: Important (Should address before implementation)
+
+| Issue | Effort | Owner/Phase | Completion Criteria |
+|-------|--------|-------------|-------------------|
+| **11. PII Taxonomy Completeness** | 6h (0.75d) | Privacy Lead | Canonical taxonomy created; all refs use same list; patterns updated |
+| **12. Cost Analysis & Management** | 10h (1.25d) | Operations Lead | Cost model documented; budgets defined; monitoring specified |
+| **13. Installation & Onboarding Guide** | 8h (1d) | DevOps Lead | Installation guide created; tested on 3 platforms; troubleshooting included |
+| **14. Subagent Meta-Testing** | 6h (0.75d) | Quality Lead | Validation strategy documented; quality gates defined |
+
+**Total Priority 3 Effort:** 30 hours (3.75 days)
+
+---
+
+### Priority 4: Nice to Have (Quality improvements)
+
+| Issue | Effort | Owner/Phase | Completion Criteria |
+|-------|--------|-------------|-------------------|
+| Regex pattern review & property-based tests | 8h | Quality Lead | Named patterns; benchmarks; property tests specified |
+| Timestamp format normalization | 2h | Standards Lead | ISO-8601 standard chosen; all samples updated |
+| WAL in-memory test cleanup | 2h | Test Lead | WAL removed from :memory: tests |
+| Metrics abstraction | 4h | Infra Lead | Pluggable metrics interface; no-op default provided |
+| Operational runbook | 6h | Operations Lead | Restart procedures; queue recovery; backup/restore documented |
+
+**Total Priority 4 Effort:** 22 hours (2.75 days)
+
+---
+
+## Total Remediation Summary
+
+| Priority | Effort | Timeline Impact |
+|----------|--------|-----------------|
+| **Priority 1 (Blockers)** | 126h + PoC | 15.75 days + 4-6 weeks |
+| **Priority 2 (High Risk)** | 56h | 7 days |
+| **Priority 3 (Important)** | 30h | 3.75 days |
+| **Priority 4 (Nice to Have)** | 22h | 2.75 days |
+| **TOTAL** | 234h (29.25 days) | ~6 weeks + PoC |
+
+**Recommended Approach:**
+1. **Weeks 1-3:** Complete all Priority 1 blockers (parallel workstreams)
+2. **Weeks 4-9:** Execute Phase -1 Proof of Concept
+3. **Week 10:** Address Priority 2 issues based on PoC learnings
+4. **Week 11:** Address Priority 3 issues
+5. **Week 12:** Priority 4 cleanup + final documentation review
+6. **Week 13+:** Begin Phase 0 implementation with confidence
+
+---
+
+## Timeline Recommendation
+
+### Current Plan Assessment
+- **Current Timeline:** 7-9 weeks for full MVP
+- **GPT-5 Verdict:** "Not ready for implementation until critical issues addressed"
+- **Gemini Verdict:** "Highly unrealistic... more realistic would be 4-6 months"
+
+### Revised Recommended Timeline
+
+#### Phase -1: Proof of Concept & Remediation (10 weeks)
+- **Weeks 1-3:** Critical documentation remediation (Priority 1)
+- **Weeks 4-9:** PoC for subagent-driven development
+  - Select single non-critical component (e.g., token balance tracking)
+  - Build testing harness MVP
+  - Measure actual velocity with subagents
+  - Validate methodology assumptions
+  - **Deliverable:** PoC report with go/no-go recommendation
+
+#### Phase 0: Foundation (3 weeks)
+- Database setup
+- Hook infrastructure
+- Testing framework
+- **Revised from 2 weeks based on PoC overhead**
+
+#### Phase 1: Event Capture (3 weeks)
+- Hook implementation
+- Event queue
+- Initial sanitization
+- **Revised from 2 weeks**
+
+#### Phase 2: Sanitization Pipeline (4 weeks)
+- Gold dataset creation (1000+ examples)
+- AI/rule hybrid detector
+- 98% precision / 95% recall target
+- **Revised from 7-10 days** (Gemini: "multi-week data science project")
+
+#### Phase 3: Learning Extraction (3 weeks)
+- Pattern detection
+- LLM-based extraction
+- Quality validation
+- **Revised from 7-10 days**
+
+#### Phase 4: Global Network (4 weeks)
+- IPFS integration
+- Upload approval flow
+- Legal review checkpoint
+- **Revised from 7-10 days** (includes consent implementation)
+
+#### Buffer & Stabilization (2 weeks)
+- Bug fixes
+- Performance optimization
+- Documentation updates
+
+### Total Revised Timeline: **29 weeks (7 months)**
+- **Remediation + PoC:** 10 weeks
+- **Implementation (Phases 0-4):** 17 weeks
+- **Buffer:** 2 weeks
+
+### Stakeholder Communication
+**Key Message:** "The project has exceptional architectural foundations, but rushing a 7-9 week timeline would compromise quality and create legal/privacy risks. The revised 7-month timeline includes critical remediation, methodology validation, and realistic phase durations. This investment ensures a robust, compliant, and maintainable system."
+
+---
+
+## Documentation Updates Needed
+
+### New Documents to Create
+
+| Document | Priority | Effort | Purpose |
+|----------|----------|--------|---------|
+| `architecture-sanitization-pipeline-2025-01-16.md` | P1 | 16h | Define complete sanitization flow, rules, AI validation |
+| `architecture-learning-extraction-2025-01-16.md` | P1 | 12h | Specify learning extraction pipeline, prompts, quality gates |
+| `architecture-mcp-server-2025-01-16.md` | P1 | 10h | MCP server contract, tools, resources, schemas |
+| `architecture-database-schema-2025-01-16.md` | P1 | 6h | Unified schema architecture document |
+| `reference-event-schema.md` | P1 | 4h | Canonical event/message schema reference |
+| `reference-hook-configuration.md` | P1 | 4h | Hook config contract and examples |
+| `guide-database-setup.md` | P1 | 6h | Database installation and setup guide |
+| `decision-data-licensing-consent-2025-01-16.md` (ADR-007) | P1 | 12h | Legal framework for data sharing |
+| `architecture-user-interface-2025-01-16.md` | P2 | 10h | User interaction model and CLI/MCP interface |
+| `architecture-subagent-validation-2025-01-16.md` | P3 | 6h | Meta-testing and quality assurance for subagents |
+| `guide-installation-setup-2025-01-16.md` | P3 | 8h | End-to-end installation and onboarding |
+| `reference-cost-model-2025-01-16.md` | P3 | 6h | Cost analysis and budget management |
+
+**Total New Documents:** 12 documents, 100 hours effort
+
+---
+
+### Existing Documents Requiring Updates
+
+| Document | Updates Needed | Effort |
+|----------|----------------|--------|
+| `decision-privacy-guarantees.md` (ADR-004) | Add section 4.2: Canonical Pre-Sanitization Flow; resolve raw storage contradictions | 6h |
+| `architecture-hooks-event-capture.md` | Remove raw content persistence; align with sanitized-only policy; fix IO/config refs | 8h |
+| `reference-database-schema.md` | Unify schema; remove/clarify events table; add event_queue if retained; unify status enums | 8h |
+| `guide-phase-1-implementation.md` | Align with canonical sanitization flow; update schema references | 4h |
+| `plan-original-user-vision.md` | Add disclaimer about chain-of-thought exclusion; annotate non-compliant original intent | 2h |
+| `architecture/INDEX.md` | Add links to new architecture docs; fix broken references | 2h |
+| `plan-implementation-roadmap.md` | Revise timeline to 7 months; add Phase -1 PoC; update phase durations | 4h |
+| All code samples (multiple files) | Update to compiled JS; fix performance imports; unify schemas; ULID migration | 16h |
+
+**Total Update Effort:** 50 hours
+
+---
+
+### Cross-Reference Integrity
+
+**Actions Required:**
+1. **Link Audit** (4h): Scan all markdown files for broken internal links
+2. **Schema Reference Sweep** (4h): Ensure all table/column references valid
+3. **Status Enum Normalization** (4h): Replace all status values with canonical set
+4. **Config Path Standardization** (2h): Replace all hook config paths with chosen canonical path
+
+**Total Cross-Reference Effort:** 14 hours
+
+---
+
+## Concrete Next Steps (Week 1 Action Plan)
+
+### Day 1: Privacy Remediation
+- [ ] **Morning:** Create ADR-004 section 4.2 "Canonical Pre-Sanitization Flow"
+  - Define: Hook → fastSanitize (sync) → persist sanitized → AI validate (async)
+  - Diagram the flow
+  - Document memory-only buffer policy
+- [ ] **Afternoon:** Audit all code samples for raw content persistence
+  - Search for: `.content`, `raw_content`, writes to "events" table
+  - Create fix list with file locations
+
+### Day 2: Privacy Remediation (Continued)
+- [ ] **Morning:** Update architecture-hooks-event-capture.md
+  - Remove raw content persistence code
+  - Update to sanitized-only flow
+- [ ] **Afternoon:** Update database schema reference
+  - Remove "events" table or convert to sanitized-only
+  - Update all CREATE TABLE statements
+
+### Day 3: Schema Unification
+- [ ] **Morning:** Decide canonical schema model (messages + job_queue)
+  - Document decision
+  - Create unified status enum
+- [ ] **Afternoon:** Create reference-event-schema.md
+  - Define message schema
+  - Specify ULID usage
+  - Document sequence strategy
+
+### Day 4: Missing Architecture Docs (Start)
+- [ ] **Full Day:** Create architecture-sanitization-pipeline-2025-01-16.md
+  - Component diagram
+  - Pre-sanitization rules (fast, regex)
+  - AI validation rules (prompts, budgets)
+  - PII taxonomy (canonical list)
+  - Integration points
+
+### Day 5: Missing Architecture Docs (Continue)
+- [ ] **Morning:** Create reference-hook-configuration.md
+  - Canonical config path decision
+  - IO contract (stdin)
+  - Schema and examples
+- [ ] **Afternoon:** Create guide-database-setup.md
+  - Installation steps
+  - Schema migration
+  - WAL configuration
+
+---
+
+### Week 1 Deliverables Checklist
+- [ ] Privacy contradiction resolved (ADR-004 updated, code audited, schema fixed)
+- [ ] Canonical schema decided and documented
+- [ ] 3 of 6 missing reference docs created (event schema, hook config, DB setup)
+- [ ] Sanitization pipeline architecture complete
+- [ ] Status report prepared for stakeholders with timeline revision proposal
+
+---
+
+## Success Metrics for Remediation
+
+### Documentation Completeness
+- [ ] All referenced documents exist (zero broken links)
+- [ ] All architecture components have detailed specs
+- [ ] All code samples executable and aligned with specs
+- [ ] Cross-references validated and consistent
+
+### Privacy Compliance
+- [ ] Privacy canary test: Raw PII fails to persist to disk (pass)
+- [ ] Grep audit: No "raw" content in storage paths (pass)
+- [ ] ADR-004 canonical flow section complete
+- [ ] All schemas show sanitized_content only
+
+### Technical Consistency
+- [ ] Single status enum used everywhere
+- [ ] Single ID strategy (ULID) documented and implemented
+- [ ] Single hook IO method (stdin) in all samples
+- [ ] Single config path in all references
+- [ ] All hooks use compiled JavaScript
+
+### Legal/Policy Readiness
+- [ ] ADR-007 (consent/licensing) complete
+- [ ] Default opt-out enforced in code
+- [ ] Upload approval gate documented
+- [ ] Legal review checkpoint added to Phase 4
+
+### Timeline Realism
+- [ ] PoC phase added to roadmap
+- [ ] Phase durations revised to 5-6 months total
+- [ ] Risk register for subagent methodology created
+- [ ] Stakeholder approval obtained for revised timeline
+
+---
+
+## Risk Assessment Post-Remediation
+
+### Residual Risks After Remediation
+
+#### High Risk (Monitor Closely)
+1. **Subagent Methodology Unproven**
+   - **Mitigation:** PoC phase validates before full commitment
+   - **Fallback:** Traditional development if agents inefficient
+
+2. **Hook Performance Budget**
+   - **Mitigation:** Compiled JS, benchmark suite, measured budgets
+   - **Fallback:** Async event capture if sync budget unachievable
+
+#### Medium Risk (Manage)
+3. **AI Sanitization Quality (98%/95% targets)**
+   - **Mitigation:** Gold dataset, hybrid approach, ongoing tuning
+   - **Monitoring:** Precision/recall metrics, canary tests
+
+4. **Claude API Costs**
+   - **Mitigation:** Cost model, budgets, rate limiting
+   - **Monitoring:** Monthly spend tracking
+
+#### Low Risk (Accept)
+5. **SQLite Performance at Scale**
+   - **Mitigation:** WAL mode, reasonable single-user limits
+   - **Future:** Migrate to PostgreSQL post-MVP
+
+6. **IPFS Network Availability**
+   - **Mitigation:** Local-first architecture, graceful degradation
+   - **Monitoring:** Upload success rates
+
+---
+
+## Recommendations for Project Leadership
+
+### Immediate Actions (This Week)
+1. **Halt any implementation work** until Priority 1 blockers resolved
+2. **Assign owners** to each Priority 1 remediation task
+3. **Schedule daily standups** for remediation team
+4. **Communicate timeline revision** to stakeholders with rationale
+5. **Begin PoC planning** (scope, success criteria, resources)
+
+### Strategic Decisions Required
+1. **Schema Model:** Approve canonical schema (messages + job_queue)
+2. **Config Path:** Choose .claude/hooks.json as standard
+3. **ID Strategy:** Approve ULID globally
+4. **License Choice:** Decide CC0 vs MIT for shared learnings
+5. **PoC Go/No-Go Criteria:** Define what validates subagent approach
+
+### Resource Allocation
+- **Documentation Team:** 2-3 people for 3 weeks (Priority 1)
+- **PoC Team:** 1-2 developers + 1 QA for 4-6 weeks
+- **Legal Counsel:** Review ADR-007 (consent/licensing)
+- **Technical Architect:** Schema and architecture doc reviews
+
+### Communication Plan
+- **Internal:** Weekly progress reports on remediation
+- **Stakeholders:** Timeline revision presentation (with rationale)
+- **Legal:** Consent model review meeting
+- **Development Team:** "Hold" until documentation complete
+
+---
+
+## Conclusion
+
+### What's Exceptional
+Both reviewers praised:
+- **World-class documentation quality:** Structure, naming, consistency
+- **Privacy-first architecture:** When consistently applied, it's exemplary
+- **Pragmatic MVP scoping:** Local-first approach de-risks the project
+- **Innovative vision:** Subagent development and learning mining concepts are forward-thinking
+- **Strong testing culture:** Coverage targets, adversarial tests, quality gates
+
+### What's Broken
+Both reviewers flagged as critical:
+- **Privacy contradiction:** Raw vs sanitized storage must be resolved
+- **Missing core docs:** 4 architecture documents blocking implementation
+- **Schema inconsistency:** Events/event_queue/job_queue naming drift
+- **Unrealistic timeline:** 7-9 weeks impossible, 5-6 months realistic
+- **Legal/consent gap:** No licensing or consent model for global uploads
+
+### The Path Forward
+**This project can succeed**, but only with disciplined remediation:
+
+1. **3 weeks:** Fix Priority 1 blockers (documentation work)
+2. **4-6 weeks:** Validate methodology with PoC
+3. **17 weeks:** Implement Phases 0-4 with realistic durations
+4. **2 weeks:** Buffer and stabilization
+
+**Total: 26-28 weeks (6-7 months)** from today to MVP launch.
+
+The alternative—rushing a 7-9 week timeline with unresolved contradictions—risks:
+- Privacy policy violations
+- Legal liability
+- Architectural rework mid-implementation
+- Developer burnout
+- Project failure
+
+### Final Verdict
+**Status:** NOT READY for implementation
+**Recommended Action:** Execute 3-week remediation sprint, then proceed to PoC
+**Confidence After Remediation:** HIGH (if timeline revised and PoC validates methodology)
+
+---
+
+## Appendix: Reviewer Agreement Matrix
+
+| Issue | GPT-5 | Gemini | Severity | Consensus |
+|-------|-------|--------|----------|-----------|
+| Privacy contradiction (raw vs sanitized) | ✅ Critical | ✅ Critical | CRITICAL | **FULL** |
+| Missing architecture docs (4 files) | ✅ Critical | ✅ Critical | CRITICAL | **FULL** |
+| Schema/naming drift | ✅ Critical | ⚠️ Implicit | CRITICAL | **STRONG** |
+| Timeline unrealistic | ⚠️ Implicit | ✅ Major | CRITICAL | **STRONG** |
+| Hook performance risk | ✅ Major | ✅ Major | MAJOR | **FULL** |
+| Data licensing/consent missing | ✅ Major | ✅ Critical | CRITICAL | **FULL** |
+| Chain-of-thought contradiction | ✅ Critical | ✅ Major | MAJOR | **FULL** |
+| UUID vs ULID inconsistency | ✅ Critical | ❌ Not mentioned | MAJOR | GPT-5 only |
+| Hook IO/config inconsistency | ✅ Critical | ❌ Not mentioned | MAJOR | GPT-5 only |
+| User management missing | ❌ Not mentioned | ✅ Major | MAJOR | Gemini only |
+| Cost analysis missing | ❌ Not mentioned | ✅ Moderate | MODERATE | Gemini only |
+| Installation guide missing | ❌ Not mentioned | ✅ Moderate | MODERATE | Gemini only |
+| Meta-testing problem | ❌ Not mentioned | ✅ Moderate | MODERATE | Gemini only |
+
+**Consensus Rate:** 7 of 13 issues (54%) identified by both reviewers
+**Critical Consensus:** 4 of 5 critical blockers agreed upon (80%)
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** 2025-01-16
+**Next Review:** After Priority 1 remediation complete (Week 4)
+**Owner:** Technical Architecture & Project Management Team
+
+---
+
+## Quick Reference: Top 5 Critical Actions
+
+1. **Resolve Privacy Contradiction** → ADR-004 section 4.2 + code audit (2.5 days)
+2. **Create 4 Missing Architecture Docs** → Sanitization, Learning, MCP, Database (6.5 days)
+3. **Unify Schema & Status Enums** → Single canonical schema (3.25 days)
+4. **Create Consent/Licensing ADR** → ADR-007 with legal framework (3 days)
+5. **Revise Timeline to 5-6 Months** → Add PoC phase, realistic durations (4h + PoC execution)
+
+**Total Critical Path:** ~16 days documentation + 4-6 weeks PoC = **10 weeks to implementation-ready state**
+# Hooks and Event Capture Architecture
+
+> Low-latency event capture system using Claude Code hooks without blocking user interactions
+
+---
+title: Hooks and Event Capture Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [hooks, event-capture, performance, async, non-blocking]
+---
+
+## Overview
+
+The Hooks and Event Capture system captures every Claude Code interaction (user prompts and agent responses) without impacting user experience. It achieves sub-100ms performance through fire-and-forget async design, persistent queuing, and graceful error handling.
+
+**Core Principle**: Never block the user. Capture everything, fail silently with logging.
+
+## Goals
+
+- Capture 100% of user-agent interactions
+- Hook execution < 100ms (p95)
+- Non-blocking design (fire-and-forget)
+- Crash-safe event persistence
+- Zero user-visible errors
+- Idempotent event processing
+
+## Non-Goals
+
+- Real-time processing (use async queue)
+- Perfect ordering across crashes (eventual consistency OK)
+- Capturing internal LLM chain-of-thought (not accessible)
+- Network-based event streaming (local-first)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Claude Code                              │
+│                 (User Interaction Layer)                     │
+└───────────┬─────────────────────────────┬───────────────────┘
+            │                              │
+            ▼ UserPromptSubmit             ▼ Stop
+   ┌────────────────┐            ┌────────────────┐
+   │  Hook Handler  │            │  Hook Handler  │
+   │  (< 50ms)      │            │  (< 50ms)      │
+   └────────┬───────┘            └───────┬────────┘
+            │                             │
+            ├─────────────────────────────┘
+            │
+            ▼ serialize + enqueue (fire-and-forget)
+   ┌────────────────────────────────────────────┐
+   │         Event Collector                     │
+   │  ┌──────────────────────────────────────┐  │
+   │  │  - Assign conversation_id            │  │
+   │  │  - Assign message_id                 │  │
+   │  │  - Add sequence number               │  │
+   │  │  - Add timestamps                    │  │
+   │  │  - Add idempotency_key               │  │
+   │  └──────────────────────────────────────┘  │
+   └────────────┬───────────────────────────────┘
+                │
+                ▼ persist (WAL mode)
+   ┌────────────────────────────────────────────┐
+   │      SQLite Event Queue                     │
+   │  ┌──────────────────────────────────────┐  │
+   │  │  events table                        │  │
+   │  │  - id, conversation_id, message_id   │  │
+   │  │  - type, role, content, sequence     │  │
+   │  │  - idempotency_key, timestamps       │  │
+   │  │  - status (pending/processing/done)  │  │
+   │  └──────────────────────────────────────┘  │
+   └────────────┬───────────────────────────────┘
+                │
+                ▼ async worker picks up
+   ┌────────────────────────────────────────────┐
+   │    Sanitization Job Queue                   │
+   │    (downstream processing)                  │
+   └────────────────────────────────────────────┘
+```
+
+## Event Schema
+
+### Event Structure
+
+```typescript
+interface CapturedEvent {
+  // Identity
+  id: string;                    // UUID v4
+  conversation_id: string;       // Stable conversation identifier
+  message_id: string;            // Unique message identifier
+  idempotency_key: string;       // For deduplication
+
+  // Content
+  type: 'user_prompt' | 'agent_response';
+  role: 'user' | 'assistant';
+  content: string;               // Raw content (NOT sanitized yet)
+  tool_calls?: ToolCall[];       // Tool invocations
+  attachments?: Attachment[];    // File attachments
+
+  // Metadata
+  sequence: number;              // Order within conversation
+  session_id: string;            // Claude Code session ID
+  project_id?: string;           // Project identifier
+  created_at: number;            // Unix timestamp (ms)
+  hook_name: string;             // 'UserPromptSubmit' | 'Stop'
+
+  // Versioning
+  client_version: string;        // Claude Code version
+  policy_version: string;        // Sanitization policy version
+
+  // Processing
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  processed_at?: number;
+  error?: string;
+}
+
+interface ToolCall {
+  tool: string;
+  input: any;
+  output?: any;
+}
+
+interface Attachment {
+  name: string;
+  path: string;
+  mime_type: string;
+  size: number;
+}
+```
+
+## Hook Implementation
+
+### UserPromptSubmit Hook
+
+**File**: `.claude/hooks/user-prompt-submit.ts`
+
+```typescript
+#!/usr/bin/env node
+import { captureEvent } from './lib/event-collector';
+
+/**
+ * UserPromptSubmit hook
+ * Executes BEFORE Claude processes the user's prompt
+ * Performance budget: < 50ms
+ */
+async function main() {
+  const startTime = performance.now();
+
+  try {
+    // Read hook payload from stdin
+    const payload = await readStdin();
+    const hookData = JSON.parse(payload);
+
+    // Fire-and-forget event capture
+    captureEvent({
+      type: 'user_prompt',
+      role: 'user',
+      content: hookData.prompt,
+      tool_calls: hookData.toolCalls,
+      attachments: hookData.attachments,
+      session_id: hookData.sessionId,
+      project_id: hookData.projectId
+    }).catch(error => {
+      // Log error but don't throw (never block user)
+      console.error('[Hook Error]', error);
+    });
+
+    // Always succeed quickly
+    const duration = performance.now() - startTime;
+    if (duration > 50) {
+      console.warn(`[Hook Warning] Execution took ${duration}ms (budget: 50ms)`);
+    }
+
+  } catch (error) {
+    // Silent failure - log only
+    console.error('[Hook Critical Error]', error);
+  }
+
+  // Exit successfully (never block)
+  process.exit(0);
+}
+
+main();
+```
+
+### Stop Hook
+
+**File**: `.claude/hooks/stop.ts`
+
+```typescript
+#!/usr/bin/env node
+import { captureEvent } from './lib/event-collector';
+
+/**
+ * Stop hook
+ * Executes AFTER Claude completes its response
+ * Performance budget: < 50ms
+ */
+async function main() {
+  const startTime = performance.now();
+
+  try {
+    const payload = await readStdin();
+    const hookData = JSON.parse(payload);
+
+    // Fire-and-forget event capture
+    captureEvent({
+      type: 'agent_response',
+      role: 'assistant',
+      content: hookData.response,
+      tool_calls: hookData.toolCalls,
+      session_id: hookData.sessionId,
+      project_id: hookData.projectId
+    }).catch(error => {
+      console.error('[Hook Error]', error);
+    });
+
+    const duration = performance.now() - startTime;
+    if (duration > 50) {
+      console.warn(`[Hook Warning] Execution took ${duration}ms (budget: 50ms)`);
+    }
+
+  } catch (error) {
+    console.error('[Hook Critical Error]', error);
+  }
+
+  process.exit(0);
+}
+
+main();
+```
+
+### Hook Configuration
+
+**File**: `.claude/hooks.json`
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": {
+      "script": ".claude/hooks/user-prompt-submit.ts",
+      "enabled": true,
+      "timeout": 100
+    },
+    "Stop": {
+      "script": ".claude/hooks/stop.ts",
+      "enabled": true,
+      "timeout": 100
+    }
+  },
+  "config": {
+    "eventQueuePath": "${PROJECT_ROOT}/.data/events.db",
+    "maxBufferSize": 1000,
+    "fallbackToSampling": true,
+    "samplingRate": 0.1
+  }
+}
+```
+
+## Event Collector
+
+### Non-Blocking Design
+
+```typescript
+// lib/event-collector.ts
+import { EventEmitter } from 'events';
+import { v4 as uuid } from 'uuid';
+
+/**
+ * Fire-and-forget event capture
+ * Returns immediately, processes async
+ */
+export async function captureEvent(event: Partial<CapturedEvent>): Promise<void> {
+  // Immediate return - don't await
+  setImmediate(() => {
+    processEvent(event).catch(error => {
+      logger.error('Event processing failed', { error, event });
+    });
+  });
+
+  // Return immediately (< 1ms)
+  return;
+}
+
+/**
+ * Async event processing
+ * Runs in background, never blocks caller
+ */
+async function processEvent(event: Partial<CapturedEvent>): Promise<void> {
+  try {
+    // Enrich event with metadata
+    const enrichedEvent: CapturedEvent = {
+      id: uuid(),
+      conversation_id: getOrCreateConversationId(event),
+      message_id: uuid(),
+      idempotency_key: generateIdempotencyKey(event),
+      sequence: getNextSequence(event.conversation_id!),
+      session_id: event.session_id || getSessionId(),
+      created_at: Date.now(),
+      hook_name: event.type === 'user_prompt' ? 'UserPromptSubmit' : 'Stop',
+      client_version: getClientVersion(),
+      policy_version: getPolicyVersion(),
+      status: 'pending',
+      ...event
+    } as CapturedEvent;
+
+    // Persist to queue (< 10ms with WAL)
+    await eventQueue.enqueue(enrichedEvent);
+
+    logger.info('Event captured', {
+      conversation_id: enrichedEvent.conversation_id,
+      message_id: enrichedEvent.message_id,
+      type: enrichedEvent.type
+    });
+
+  } catch (error) {
+    logger.error('Event enrichment failed', { error, event });
+    throw error;
+  }
+}
+```
+
+### Conversation Management
+
+```typescript
+// lib/conversation-tracker.ts
+const conversationCache = new Map<string, string>();
+
+/**
+ * Get or create stable conversation ID
+ * Uses session_id + heuristics to group messages
+ */
+function getOrCreateConversationId(event: Partial<CapturedEvent>): string {
+  const sessionId = event.session_id || getSessionId();
+
+  // Check cache
+  if (conversationCache.has(sessionId)) {
+    return conversationCache.get(sessionId)!;
+  }
+
+  // Create new conversation ID
+  const conversationId = uuid();
+  conversationCache.set(sessionId, conversationId);
+
+  return conversationId;
+}
+
+/**
+ * Get next sequence number for conversation
+ * Ensures ordering within conversation
+ */
+function getNextSequence(conversationId: string): number {
+  // Query database for max sequence
+  const result = db.prepare(`
+    SELECT COALESCE(MAX(sequence), 0) as max_seq
+    FROM events
+    WHERE conversation_id = ?
+  `).get(conversationId);
+
+  return (result?.max_seq || 0) + 1;
+}
+```
+
+## Event Queue Persistence
+
+### SQLite Configuration
+
+```typescript
+// lib/event-queue.ts
+import Database from 'better-sqlite3';
+
+class EventQueue {
+  private db: Database.Database;
+
+  constructor(dbPath: string) {
+    this.db = new Database(dbPath);
+
+    // Performance optimizations
+    this.db.pragma('journal_mode = WAL');        // Write-ahead logging
+    this.db.pragma('synchronous = NORMAL');      // Balanced safety/speed
+    this.db.pragma('foreign_keys = ON');
+    this.db.pragma('busy_timeout = 5000');
+
+    this.initializeSchema();
+  }
+
+  private initializeSchema(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS events (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL UNIQUE,
+
+        type TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tool_calls TEXT,
+        attachments TEXT,
+
+        sequence INTEGER NOT NULL,
+        session_id TEXT NOT NULL,
+        project_id TEXT,
+        created_at INTEGER NOT NULL,
+        hook_name TEXT NOT NULL,
+
+        client_version TEXT NOT NULL,
+        policy_version TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'pending',
+        processed_at INTEGER,
+        error TEXT,
+
+        CHECK(type IN ('user_prompt', 'agent_response')),
+        CHECK(role IN ('user', 'assistant')),
+        CHECK(status IN ('pending', 'processing', 'completed', 'failed'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_events_conversation
+        ON events(conversation_id, sequence);
+
+      CREATE INDEX IF NOT EXISTS idx_events_status
+        ON events(status, created_at);
+
+      CREATE INDEX IF NOT EXISTS idx_events_session
+        ON events(session_id, created_at);
+    `);
+  }
+
+  /**
+   * Enqueue event (< 10ms with WAL)
+   * Idempotent via idempotency_key
+   */
+  async enqueue(event: CapturedEvent): Promise<void> {
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO events (
+        id, conversation_id, message_id, idempotency_key,
+        type, role, content, tool_calls, attachments,
+        sequence, session_id, project_id, created_at, hook_name,
+        client_version, policy_version, status
+      ) VALUES (
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?
+      )
+    `);
+
+    insert.run(
+      event.id,
+      event.conversation_id,
+      event.message_id,
+      event.idempotency_key,
+      event.type,
+      event.role,
+      event.content,
+      JSON.stringify(event.tool_calls || []),
+      JSON.stringify(event.attachments || []),
+      event.sequence,
+      event.session_id,
+      event.project_id,
+      event.created_at,
+      event.hook_name,
+      event.client_version,
+      event.policy_version,
+      event.status
+    );
+  }
+
+  /**
+   * Dequeue pending events for processing
+   */
+  async dequeue(limit: number = 10): Promise<CapturedEvent[]> {
+    const events = this.db.prepare(`
+      SELECT * FROM events
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT ?
+    `).all(limit);
+
+    return events.map(row => ({
+      ...row,
+      tool_calls: JSON.parse(row.tool_calls || '[]'),
+      attachments: JSON.parse(row.attachments || '[]')
+    }));
+  }
+}
+```
+
+### Idempotency
+
+```typescript
+/**
+ * Generate idempotency key for deduplication
+ * Ensures retry-safe operations
+ */
+function generateIdempotencyKey(event: Partial<CapturedEvent>): string {
+  const components = [
+    event.session_id,
+    event.type,
+    event.content?.slice(0, 100), // First 100 chars
+    event.created_at
+  ];
+
+  return createHash('sha256')
+    .update(components.join('|'))
+    .digest('hex');
+}
+```
+
+## Performance Optimizations
+
+### Backpressure Handling
+
+```typescript
+// lib/backpressure.ts
+class BackpressureManager {
+  private bufferSize: number = 0;
+  private maxBufferSize: number = 1000;
+  private samplingRate: number = 1.0;
+
+  async handleEvent(event: Partial<CapturedEvent>): Promise<boolean> {
+    // Check buffer size
+    this.bufferSize = await this.getQueueSize();
+
+    if (this.bufferSize > this.maxBufferSize) {
+      // Apply sampling
+      if (Math.random() > this.samplingRate) {
+        logger.warn('Event dropped due to backpressure', {
+          bufferSize: this.bufferSize,
+          samplingRate: this.samplingRate
+        });
+        return false;
+      }
+    }
+
+    // Process event
+    await captureEvent(event);
+    return true;
+  }
+
+  private async getQueueSize(): Promise<number> {
+    const result = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM events
+      WHERE status = 'pending'
+    `).get();
+
+    return result?.count || 0;
+  }
+}
+```
+
+### Streaming Handling
+
+```typescript
+// lib/streaming-handler.ts
+class StreamingHandler {
+  private partialBuffers = new Map<string, string>();
+
+  handlePartial(sessionId: string, chunk: string): void {
+    // Buffer partial chunks
+    const existing = this.partialBuffers.get(sessionId) || '';
+    this.partialBuffers.set(sessionId, existing + chunk);
+  }
+
+  async handleComplete(sessionId: string, final?: string): Promise<void> {
+    // Get buffered content
+    const buffered = this.partialBuffers.get(sessionId) || '';
+    const content = final || buffered;
+
+    // Capture complete event
+    await captureEvent({
+      session_id: sessionId,
+      type: 'agent_response',
+      role: 'assistant',
+      content
+    });
+
+    // Clear buffer
+    this.partialBuffers.delete(sessionId);
+  }
+
+  // Cleanup stale buffers
+  cleanup(): void {
+    const now = Date.now();
+    for (const [sessionId, _] of this.partialBuffers) {
+      const lastUpdate = this.getLastUpdate(sessionId);
+      if (now - lastUpdate > 60000) { // 1 minute timeout
+        this.partialBuffers.delete(sessionId);
+      }
+    }
+  }
+}
+```
+
+## Error Handling
+
+### Graceful Degradation
+
+```typescript
+// lib/error-handler.ts
+class HookErrorHandler {
+  async safeExecute<T>(
+    operation: () => Promise<T>,
+    fallback: T
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      logger.error('Hook operation failed', { error });
+
+      // Emit metric
+      metrics.increment('hook.error', {
+        operation: operation.name
+      });
+
+      // Return fallback (never throw to caller)
+      return fallback;
+    }
+  }
+
+  handleCriticalError(error: Error): void {
+    // Log to file (don't rely on network)
+    appendFileSync(
+      '.data/hook-errors.log',
+      JSON.stringify({ timestamp: Date.now(), error: error.message }) + '\n'
+    );
+
+    // Attempt to emit metric
+    metrics.increment('hook.critical_error').catch(() => {});
+  }
+}
+```
+
+### Recovery Strategies
+
+```typescript
+// lib/recovery.ts
+class RecoveryManager {
+  /**
+   * Recover from crashed queue
+   * Reset stuck events to pending
+   */
+  async recoverQueue(): Promise<void> {
+    const updated = db.prepare(`
+      UPDATE events
+      SET status = 'pending', error = 'Recovered from crash'
+      WHERE status = 'processing'
+        AND created_at < ?
+    `).run(Date.now() - 300000); // 5 minutes ago
+
+    logger.info('Queue recovery completed', {
+      recovered: updated.changes
+    });
+  }
+
+  /**
+   * Cleanup old completed events
+   */
+  async cleanup(retentionDays: number = 7): Promise<void> {
+    const cutoff = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+
+    const deleted = db.prepare(`
+      DELETE FROM events
+      WHERE status = 'completed'
+        AND processed_at < ?
+    `).run(cutoff);
+
+    logger.info('Event cleanup completed', {
+      deleted: deleted.changes
+    });
+  }
+}
+```
+
+## Security Considerations
+
+### Hook Sandboxing
+
+```typescript
+// Deny network egress in hooks
+process.env.NODE_ENV = 'hook';
+process.env.NO_PROXY = '*';
+
+// Restrict file system access
+const allowedPaths = [
+  path.join(PROJECT_ROOT, '.data'),
+  path.join(PROJECT_ROOT, '.claude')
+];
+
+function validatePath(filePath: string): boolean {
+  const resolved = path.resolve(filePath);
+  return allowedPaths.some(allowed => resolved.startsWith(allowed));
+}
+```
+
+### Log Sanitization
+
+```typescript
+// Never log sensitive data in hooks
+function sanitizeLogData(data: any): any {
+  const sanitized = { ...data };
+
+  // Remove potential PII fields
+  delete sanitized.content;
+  delete sanitized.tool_calls;
+  delete sanitized.attachments;
+
+  return sanitized;
+}
+
+logger.info('Event captured', sanitizeLogData(event));
+```
+
+## Monitoring
+
+### Key Metrics
+
+```typescript
+// Metrics to track
+metrics.timing('hook.execution_time', duration);
+metrics.increment('hook.success');
+metrics.increment('hook.error');
+metrics.gauge('event_queue.size', queueSize);
+metrics.timing('event_queue.enqueue_time', enqueueDuration);
+```
+
+### Health Checks
+
+```typescript
+// Health check endpoint
+async function healthCheck(): Promise<HealthStatus> {
+  return {
+    queue: {
+      size: await getQueueSize(),
+      oldestEvent: await getOldestEventAge()
+    },
+    hooks: {
+      enabled: areHooksEnabled(),
+      lastExecution: getLastExecutionTime()
+    }
+  };
+}
+```
+
+## Related Documents
+
+### Architecture
+- [Global Context Network](./architecture-global-context-network-2025-01-16.md)
+- [Sanitization Pipeline](./architecture-sanitization-pipeline-2025-01-16.md)
+- [Database Schema](./architecture-database-schema-2025-01-16.md)
+
+### Reference
+- [Event Schema Reference](../reference/reference-event-schema-2025-01-16.md)
+- [Hook Configuration](../reference/reference-hook-configuration-2025-01-16.md)

@@ -1,0 +1,4734 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: docs/STANDARDS.md, docs/architecture/architecture-mcp-server-2025-01-16.md, docs/architecture/architecture-global-context-network-2025-01-16.md, docs/reference/reference-database-schema-2025-01-16.md, docs/reference/reference-claude-agent-sdk-api-2025-01-16.md
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+docs/
+  architecture/
+    architecture-global-context-network-2025-01-16.md
+    architecture-mcp-server-2025-01-16.md
+  reference/
+    reference-claude-agent-sdk-api-2025-01-16.md
+    reference-database-schema-2025-01-16.md
+  STANDARDS.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="docs/architecture/architecture-global-context-network-2025-01-16.md">
+# Global Context Network - System Architecture
+
+> Complete system architecture for the Global Context Network MVP
+
+---
+title: Global Context Network System Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [architecture, system-design, blockchain, privacy, subagents]
+---
+
+## Overview
+
+The Global Context Network is a decentralized system for capturing, sanitizing, storing, and sharing AI agent learnings globally. It enables agents to learn from each other's experiences while maintaining strict privacy guarantees through PII sanitization before storage.
+
+### Core Innovation
+
+**"Mining through Learning"**: Instead of computational mining, users contribute valuable learnings to the network and receive token rewards based on quality and validation.
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Claude Code (User Agent)                         │
+└────────────┬─────────────────────────────────────┬──────────────────────┘
+             │                                      │
+             ▼ UserPromptSubmit                    ▼ Stop
+    ┌────────────────┐                    ┌───────────────┐
+    │  Hook Handler  │                    │  Hook Handler │
+    └────────┬───────┘                    └───────┬───────┘
+             │                                      │
+             └──────────────┬──────────────────────┘
+                            ▼
+                 ┌──────────────────────┐
+                 │  Event Collector     │
+                 │  (Captures events)   │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Event Queue        │
+                 │   (Persistent)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Sanitization Queue  │
+                 │  (Async Worker)      │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+              ┌─────────────────────────────┐
+              │   Sanitization Pipeline     │
+              │  ┌────────────────────────┐ │
+              │  │ Rule-Based Detector    │ │
+              │  │ (Regex, Fast)          │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ AI-Powered Sanitizer   │ │
+              │  │ (Context-Aware)        │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ Hybrid Validator       │ │
+              │  │ (Combine Results)      │ │
+              │  └──────────┬─────────────┘ │
+              └─────────────┼───────────────┘
+                            │
+                            ▼ SANITIZED DATA ONLY
+                 ┌──────────────────────┐
+                 │   SQLite Database    │
+                 │  ┌────────────────┐  │
+                 │  │ Conversations  │  │
+                 │  │ Messages       │  │
+                 │  │ Learnings      │  │
+                 │  │ Job Queue      │  │
+                 │  │ Uploads        │  │
+                 │  └────────────────┘  │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │ Learning Extractor   │
+                 │ (Async Worker)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Quality Filter      │
+                 │  (Score & Validate)  │
+                 └──────────┬───────────┘
+                            │
+                            ├──────────────────┐
+                            │                  │
+                            ▼                  ▼
+                 ┌──────────────────┐  ┌──────────────────┐
+                 │   MCP Server     │  │  Mining Queue    │
+                 │  (Query Access)  │  │  (Upload)        │
+                 └──────────────────┘  └────────┬─────────┘
+                            │                    │
+                            │                    ▼
+                            │         ┌──────────────────┐
+                            │         │  IPFS Upload     │
+                            │         └────────┬─────────┘
+                            │                  │
+                            │                  ▼
+                            │         ┌──────────────────┐
+                            │         │ Blockchain Tx    │
+                            │         │ (Token Rewards)  │
+                            │         └──────────────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Agent Clients      │
+                 │ (Query via MCP)      │
+                 └──────────────────────┘
+```
+
+## Core Components
+
+### 1. Event Capture Layer
+
+**Purpose**: Capture Claude Code conversations without blocking the user
+
+**Components**:
+- **UserPromptSubmit Hook**: Captures user input
+- **Stop Hook**: Captures agent responses
+- **Event Collector**: Aggregates events into conversations
+- **Event Queue**: Persists events (SQLite-based)
+
+**Key Requirements**:
+- Hook execution < 100ms
+- Never block user interaction
+- Fail silently with logging
+- Persist events across restarts
+
+### 2. Sanitization Pipeline
+
+**Purpose**: Remove ALL PII before database storage
+
+**Components**:
+- **Rule-Based Detector**: Fast regex-based PII detection
+- **AI Sanitizer**: Context-aware detection using LLM
+- **Hybrid Validator**: Combines both approaches
+- **Audit Logger**: Tracks what was redacted
+
+**PII Categories**:
+1. API Keys & Secrets
+2. File Paths (absolute with usernames)
+3. Email Addresses
+4. IP Addresses
+5. Names (person names, not variables)
+6. Phone Numbers
+7. URLs with tokens
+
+**Critical Guarantee**: NEVER store raw data. Sanitization happens BEFORE database insert.
+
+### 3. Storage Layer
+
+**Purpose**: Persist sanitized conversations and learnings
+
+**Database**: SQLite with migrations
+
+**Tables**:
+- `conversations`: Sanitized conversation metadata
+- `messages`: Individual sanitized messages
+- `learnings`: Extracted insights and patterns
+- `job_queue`: Async job tracking
+- `uploads`: Network upload status
+- `sanitization_log`: Audit trail
+
+**Design Principles**:
+- ACID compliance
+- Indexed for performance (queries < 100ms)
+- Versioned migrations
+- Transaction-based updates
+
+### 4. Async Processing Layer
+
+**Purpose**: Process jobs without blocking
+
+**Components**:
+- **Job Queue**: Persistent, priority-based queue
+- **Workers**: Independent job processors
+- **Retry Logic**: Exponential backoff
+- **Error Handling**: Quarantine failed jobs
+
+**Job Types**:
+1. `sanitize_conversation`: Run sanitization pipeline
+2. `extract_learning`: Generate learnings
+3. `mine_upload`: Upload to network
+
+### 5. Learning Extraction Layer
+
+**Purpose**: Extract valuable, reusable learnings
+
+**Components**:
+- **Conversation Analyzer**: Determines if conversation has value
+- **Category Extractors**: Specialized by learning type
+- **Quality Scorer**: Assigns confidence scores
+- **Deduplication**: Prevents duplicate learnings
+
+**Learning Categories**:
+- `pattern`: Code patterns and architectures
+- `best_practice`: Recommended approaches
+- `anti_pattern`: Things to avoid
+- `bug_fix`: Problem-solving strategies
+- `optimization`: Performance improvements
+- `tool_usage`: How to use tools/libraries
+- `workflow`: Development workflows
+- `decision`: Architecture decisions
+
+**Quality Requirements**:
+- Confidence score ≥ 0.6
+- Content length ≥ 100 characters
+- Well-categorized with tags
+- Not trivial or generic
+
+### 6. Query Interface (MCP Server)
+
+**Purpose**: Enable agents to query learnings
+
+**Protocol**: Model Context Protocol (MCP)
+
+**Tools**:
+- `search_learnings`: Query by text, category, tags
+- `get_learning_by_id`: Retrieve specific learning
+- `get_learning_context`: Full conversation for learning
+
+**Resources**:
+- `context://learnings/recent`: Latest learnings
+- `context://learnings/top-rated`: Highest confidence
+- `context://stats`: Network statistics
+
+**Performance**: All queries < 200ms
+
+### 7. Network Layer
+
+**Purpose**: Share learnings globally with rewards
+
+**Components**:
+- **IPFS Client**: Decentralized storage
+- **Blockchain Integration**: Transaction handling
+- **Token System**: Reward calculation
+- **Validator Network**: Quality validation (future)
+
+**Upload Process**:
+1. Learning queued for upload
+2. Content uploaded to IPFS → CID generated
+3. Blockchain transaction with CID
+4. Token reward calculated
+5. Status tracked in uploads table
+
+## Data Flow
+
+### Happy Path: Conversation → Global Network
+
+```
+1. User interacts with Claude Code
+   ↓
+2. Hooks capture UserPromptSubmit + Stop events
+   ↓
+3. Events queued (< 100ms, non-blocking)
+   ↓
+4. Async worker picks up sanitization job
+   ↓
+5. Sanitization pipeline removes ALL PII
+   ↓
+6. Sanitized data stored in SQLite
+   ↓
+7. Learning extraction job queued
+   ↓
+8. Async worker extracts learnings
+   ↓
+9. Quality filter scores and filters learnings
+   ↓
+10. High-quality learnings queued for upload
+   ↓
+11. Mining worker uploads to IPFS
+   ↓
+12. Blockchain transaction records upload
+   ↓
+13. Token reward distributed
+   ↓
+14. Other agents query via MCP server
+```
+
+## Privacy Guarantees
+
+### Zero-Trust PII Handling
+
+**Rule 1**: Never store unsanitized data
+**Rule 2**: Sanitize before database insertion
+**Rule 3**: Audit all redactions
+**Rule 4**: User control over uploads
+
+### Sanitization Validation
+
+**Rule-Based Layer** (Fast, Deterministic):
+- Regex patterns for known PII formats
+- < 1% false positive rate
+- Processing time < 10ms
+
+**AI Layer** (Accurate, Context-Aware):
+- LLM-based context analysis
+- Distinguishes names from variables
+- Handles company-specific terminology
+- < 5% false negative rate
+
+**Hybrid Validation**:
+- Rules catch obvious cases quickly
+- AI validates and enhances
+- Combined result sanitized
+- Audit log tracks all detections
+
+## Performance Requirements
+
+| Component | Requirement | Rationale |
+|-----------|-------------|-----------|
+| Hook Execution | < 100ms | Never block user |
+| Event Queueing | < 50ms | Fast persistence |
+| Sanitization | < 2s per conversation | Acceptable async delay |
+| Database Queries | < 100ms | Responsive queries |
+| MCP Queries | < 200ms | Agent experience |
+| Learning Extraction | < 5s per conversation | Background processing |
+
+## Scalability Considerations
+
+### Current (MVP)
+- Single SQLite database
+- Local processing
+- File-based queue
+
+### Future Scaling
+- PostgreSQL for multi-user
+- Distributed job queue (Redis)
+- Horizontal worker scaling
+- CDN for IPFS content
+- Sharded blockchain integration
+
+## Security Model
+
+### Threat Model
+
+**Threats Addressed**:
+1. PII Leakage → Sanitization before storage
+2. Unauthorized Access → Local-first architecture
+3. Data Corruption → ACID transactions
+4. Injection Attacks → Parameterized queries
+5. Secret Exposure → Hook-level filtering
+
+**Future Threats**:
+1. Network Byzantine actors → Validator consensus
+2. Spam/Junk learnings → Quality scoring + validation
+3. Sybil attacks → Identity verification
+4. Reward manipulation → Multi-validator consensus
+
+### Access Control
+
+**MVP**: Local-only access (single user)
+
+**Future**:
+- Multi-user authentication
+- Role-based access control
+- API key management for MCP
+- Encrypted storage option
+
+## Technology Stack
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Runtime | Node.js + TypeScript | Type safety, async-first |
+| Database | SQLite | Simple, embedded, ACID |
+| Testing | Vitest | Fast, modern, TypeScript-first |
+| Sanitization | Regex + Claude API | Hybrid approach |
+| MCP Server | @modelcontextprotocol/sdk | Standard protocol |
+| Blockchain | TBD (Ethereum/Celestia) | EVM compatibility |
+| Storage | IPFS | Decentralized, content-addressed |
+| Queue | SQLite-based | Simple, persistent |
+
+## Error Handling
+
+### Graceful Degradation
+
+**Hooks Fail**: Log error, don't block user
+**Sanitization Fails**: Quarantine conversation, alert
+**Learning Extraction Fails**: Mark for manual review
+**Upload Fails**: Retry with exponential backoff
+**MCP Query Fails**: Return empty with error message
+
+### Recovery Strategies
+
+1. **Job Retries**: Max 3 attempts with backoff
+2. **Dead Letter Queue**: Failed jobs for analysis
+3. **Manual Review**: Quarantine for complex cases
+4. **Rollback**: Database migrations reversible
+5. **Audit Trail**: Full logging for debugging
+
+## Testing Strategy
+
+### Test Pyramid
+
+- **70% Unit Tests**: Isolated component testing
+- **20% Integration Tests**: Component interactions
+- **10% E2E Tests**: Full system workflows
+
+### Critical Test Coverage
+
+1. **Sanitization**: Zero PII leaks in 1000+ test cases
+2. **Hooks**: Non-blocking, error handling
+3. **Queue**: No job loss, proper ordering
+4. **Database**: ACID compliance, concurrency
+5. **MCP**: Protocol compliance, performance
+
+### Claude-Powered Testing Harness
+
+Uses Claude Agent SDK to:
+- Generate comprehensive test suites
+- Validate test quality
+- Verify implementations
+- Enforce quality gates
+
+## Deployment Architecture
+
+### MVP (Local Development)
+```
+User Machine:
+  - Claude Code with hooks
+  - SQLite database
+  - Background workers
+  - MCP server (local)
+```
+
+### Production (Future)
+```
+User Machines:
+  - Claude Code with hooks
+  - Local SQLite cache
+  - MCP client
+
+Cloud Infrastructure:
+  - PostgreSQL cluster
+  - Worker pool (auto-scaling)
+  - MCP server (HA)
+  - IPFS node/gateway
+  - Blockchain node
+```
+
+## Integration Points
+
+### Claude Code Hooks
+- Configuration via `hooks.json`
+- Scripts in `.claude/hooks/`
+- Environment variables for paths
+
+### MCP Protocol
+- Standard MCP server implementation
+- Claude Code auto-discovery
+- Tool and resource definitions
+
+### Blockchain
+- Smart contract for rewards
+- Event listening for confirmations
+- Wallet integration for payouts
+
+### IPFS
+- Content upload via API
+- CID generation and tracking
+- Gateway for content retrieval
+
+## Monitoring & Observability
+
+### Key Metrics
+
+**Performance**:
+- Hook execution time
+- Sanitization duration
+- Query response time
+- Job processing rate
+
+**Quality**:
+- PII detection rate
+- Learning confidence scores
+- Test coverage percentage
+- Quality gate pass rate
+
+**Business**:
+- Conversations captured
+- Learnings extracted
+- Network uploads
+- Token rewards distributed
+
+### Logging Strategy
+
+1. **Structured Logging**: JSON format
+2. **Log Levels**: DEBUG, INFO, WARN, ERROR
+3. **Correlation IDs**: Track conversation flow
+4. **Audit Trail**: All PII redactions
+5. **Performance Metrics**: Timing for all operations
+
+## Related Documents
+
+### Architecture
+- [Subagent System](./architecture-subagent-system-2025-01-16.md)
+- [Testing Harness](./architecture-testing-harness-2025-01-16.md)
+- [Sanitization Pipeline](./architecture-sanitization-pipeline-2025-01-16.md)
+- [Database Schema](./architecture-database-schema-2025-01-16.md)
+
+### Decisions
+- [ADR: Use Claude Hooks](../decisions/decision-use-claude-hooks-2025-01-16.md)
+- [ADR: Sanitize Before Storage](../decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [ADR: Subagent-Driven Development](../decisions/decision-subagent-driven-development-2025-01-16.md)
+
+### Plans
+- [Implementation Roadmap](../plans/plan-implementation-roadmap-2025-01-16.md)
+- [Original User Vision](../plans/plan-original-user-vision-2025-01-16.md)
+
+### Reference
+- [Database Schema Reference](../reference/reference-database-schema-2025-01-16.md)
+- [Testing Strategy](../reference/reference-testing-strategy-2025-01-16.md)
+</file>
+
+<file path="docs/architecture/architecture-mcp-server-2025-01-16.md">
+# MCP Server Architecture
+
+> Model Context Protocol server for querying learnings from the Global Context Network
+
+---
+title: MCP Server Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [mcp, server, learnings, query, protocol, performance]
+applies_to: "@modelcontextprotocol/sdk 1.x, SQLite 3.40+, Node.js 18+"
+related_standards: STANDARDS.md (canonical schema, status enums, ULID, performance budgets)
+---
+
+## Overview
+
+The MCP (Model Context Protocol) server enables AI agents to query learnings from the Global Context Network. It provides a standardized interface for searching, retrieving, and contextualizing learnings with strict performance guarantees.
+
+### Purpose
+
+**Primary Goal**: Enable agents to discover and retrieve relevant learnings to inform their work.
+
+**Key Requirements**:
+- Query learnings via full-text search, filters, and direct lookup
+- Serve recent and top-rated learnings as resources
+- Maintain <200ms p95 query latency
+- Support pagination, sorting, and filtering
+- Secure local-only binding with optional auth
+- MCP SDK-compliant schemas and responses
+
+### Architecture Context
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Claude Code Agent (Client)                  │
+└────────────────────┬────────────────────────────────────┘
+                     │ MCP Protocol (stdio)
+                     ▼
+          ┌──────────────────────┐
+          │   MCP Server         │
+          │  (This Document)     │
+          └──────────┬───────────┘
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │  SQLite Database     │
+          │  - learnings table   │
+          │  - learnings_fts     │
+          │  - conversations     │
+          │  - messages          │
+          └──────────────────────┘
+```
+
+**Integration Points**:
+- **Input**: Claude Code via MCP SDK client (stdio transport)
+- **Output**: Learnings query results, statistics, metadata
+- **Storage**: SQLite database (read-only for MCP server)
+- **Discovery**: Claude Code auto-discovery via config
+
+---
+
+## MCP Server Implementation
+
+### Server Configuration
+
+**File**: `src/mcp/server.ts`
+
+```typescript
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import Database from 'better-sqlite3';
+import { LearningRepository } from '../database/repositories/learning-repository.js';
+import { ConversationRepository } from '../database/repositories/conversation-repository.js';
+
+export interface MCPServerConfig {
+  name: string;
+  version: string;
+  dbPath: string;
+  bindAddress?: string; // Default: '127.0.0.1' (local-only)
+  port?: number; // Optional HTTP transport
+  authToken?: string; // Optional API key auth
+  maxResultsPerQuery?: number; // Default: 100
+  enableStats?: boolean; // Default: true
+}
+
+export async function createMCPServer(config: MCPServerConfig): Promise<Server> {
+  // Initialize database (read-only)
+  const db = new Database(config.dbPath, { readonly: true });
+  db.pragma('journal_mode = WAL');
+  db.pragma('query_only = ON'); // Extra safety: prevent writes
+
+  const learningRepo = new LearningRepository(db);
+  const conversationRepo = new ConversationRepository(db);
+
+  // Create MCP server
+  const server = new Server(
+    {
+      name: config.name || 'global-context-learnings',
+      version: config.version || '1.0.0'
+    },
+    {
+      capabilities: {
+        tools: {}, // Provide tools for querying
+        resources: {} // Provide resources for common queries
+      }
+    }
+  );
+
+  // Register handlers
+  registerToolHandlers(server, learningRepo, conversationRepo, config);
+  registerResourceHandlers(server, learningRepo, config);
+
+  return server;
+}
+```
+
+### Claude Code Discovery
+
+**File**: `.claude/mcp.json` (auto-discovered by Claude Code)
+
+```json
+{
+  "mcpServers": {
+    "global-context-learnings": {
+      "command": "node",
+      "args": ["./dist/mcp/server.js"],
+      "env": {
+        "DB_PATH": "./context.db",
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+```
+
+**Auto-Discovery Process**:
+1. Claude Code scans `.claude/mcp.json` on startup
+2. Spawns MCP server as child process
+3. Establishes stdio transport connection
+4. Calls `tools/list` and `resources/list` to discover capabilities
+5. Makes tools/resources available to agent
+
+---
+
+## Tools
+
+### 1. search_learnings
+
+**Purpose**: Full-text search across learnings with filters
+
+**Tool Schema**:
+```typescript
+{
+  name: 'search_learnings',
+  description: 'Search learnings using full-text search with optional filters. Returns ranked results by relevance and confidence.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Search query (searches title, content, and tags). Supports FTS5 syntax: AND, OR, NOT, "phrases", prefix*'
+      },
+      category: {
+        type: 'string',
+        description: 'Filter by category',
+        enum: [
+          'pattern',
+          'best_practice',
+          'anti_pattern',
+          'bug_fix',
+          'optimization',
+          'tool_usage',
+          'workflow',
+          'decision'
+        ]
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter by tags (AND logic: all tags must match)'
+      },
+      min_confidence: {
+        type: 'number',
+        description: 'Minimum confidence score (0.0-1.0)',
+        minimum: 0.0,
+        maximum: 1.0,
+        default: 0.6
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum results to return',
+        minimum: 1,
+        maximum: 100,
+        default: 10
+      },
+      offset: {
+        type: 'number',
+        description: 'Pagination offset',
+        minimum: 0,
+        default: 0
+      }
+    },
+    required: ['query']
+  }
+}
+```
+
+**Implementation**:
+```typescript
+server.setRequestHandler('tools/call', async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'search_learnings') {
+    const startTime = performance.now();
+
+    const {
+      query,
+      category,
+      tags = [],
+      min_confidence = 0.6,
+      limit = 10,
+      offset = 0
+    } = args;
+
+    // Validate inputs
+    if (!query || typeof query !== 'string') {
+      throw new Error('query must be a non-empty string');
+    }
+
+    if (limit > config.maxResultsPerQuery) {
+      throw new Error(`limit exceeds maximum (${config.maxResultsPerQuery})`);
+    }
+
+    // Execute search
+    const results = learningRepo.search(query, {
+      category,
+      tags: tags.length > 0 ? tags : undefined,
+      minConfidence: min_confidence,
+      limit,
+      offset
+    });
+
+    const duration = performance.now() - startTime;
+
+    // Log performance
+    if (duration > 200) {
+      console.warn(`[MCP] search_learnings exceeded budget: ${duration.toFixed(2)}ms`);
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            results: results.map(l => ({
+              id: l.id,
+              title: l.title,
+              category: l.category,
+              confidence: l.confidence,
+              tags: l.tags,
+              created_at: l.created_at,
+              excerpt: truncate(l.content, 200)
+            })),
+            count: results.length,
+            query_time_ms: Math.round(duration)
+          }, null, 2)
+        }
+      ]
+    };
+  }
+
+  // ... other tools
+});
+
+function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + '...';
+}
+```
+
+**Example Request**:
+```json
+{
+  "name": "search_learnings",
+  "arguments": {
+    "query": "typescript testing vitest",
+    "category": "best_practice",
+    "min_confidence": 0.7,
+    "limit": 5
+  }
+}
+```
+
+**Example Response**:
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"results\":[{\"id\":\"01HN...\",\"title\":\"Use Vitest for TypeScript Testing\",\"category\":\"best_practice\",\"confidence\":0.85,\"tags\":[\"typescript\",\"testing\",\"vitest\"],\"created_at\":\"2025-01-15T10:30:00.000Z\",\"excerpt\":\"Vitest provides faster test execution than Jest for TypeScript projects...\"}],\"count\":5,\"query_time_ms\":45}"
+    }
+  ]
+}
+```
+
+**Performance Optimization**:
+```sql
+-- FTS5 index (created in migrations)
+CREATE VIRTUAL TABLE learnings_fts USING fts5(
+  learning_id UNINDEXED,
+  title,
+  content,
+  tags,
+  content='learnings',
+  content_rowid='rowid'
+);
+
+-- Query uses BM25 ranking
+SELECT l.*
+FROM learnings l
+JOIN learnings_fts fts ON l.rowid = fts.rowid
+WHERE fts MATCH ?
+  AND l.confidence >= ?
+  AND (? IS NULL OR l.category = ?)
+ORDER BY bm25(fts), l.confidence DESC
+LIMIT ? OFFSET ?;
+```
+
+**Performance Budget**: <200ms p95
+
+---
+
+### 2. get_learning_by_id
+
+**Purpose**: Retrieve complete learning by ID
+
+**Tool Schema**:
+```typescript
+{
+  name: 'get_learning_by_id',
+  description: 'Retrieve a specific learning by its ID. Returns full content and metadata.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+        description: 'Learning ID (ULID format)'
+      }
+    },
+    required: ['id']
+  }
+}
+```
+
+**Implementation**:
+```typescript
+if (name === 'get_learning_by_id') {
+  const startTime = performance.now();
+  const { id } = args;
+
+  if (!id || typeof id !== 'string') {
+    throw new Error('id must be a non-empty string');
+  }
+
+  const learning = learningRepo.findById(id);
+
+  if (!learning) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error: 'Learning not found',
+            id
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
+  }
+
+  const duration = performance.now() - startTime;
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          learning: {
+            id: learning.id,
+            conversation_id: learning.conversation_id,
+            source_message_ids: learning.source_message_ids,
+            category: learning.category,
+            title: learning.title,
+            content: learning.content,
+            confidence: learning.confidence,
+            tags: learning.tags,
+            created_at: learning.created_at,
+            metadata: learning.metadata
+          },
+          query_time_ms: Math.round(duration)
+        }, null, 2)
+      }
+    ]
+  };
+}
+```
+
+**Performance Budget**: <50ms p95
+
+---
+
+### 3. get_learning_context
+
+**Purpose**: Retrieve full conversation context for a learning
+
+**Tool Schema**:
+```typescript
+{
+  name: 'get_learning_context',
+  description: 'Retrieve the full conversation context that produced a learning. Includes all messages from the source conversation.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      learning_id: {
+        type: 'string',
+        description: 'Learning ID'
+      },
+      include_metadata: {
+        type: 'boolean',
+        description: 'Include conversation and message metadata',
+        default: false
+      }
+    },
+    required: ['learning_id']
+  }
+}
+```
+
+**Implementation**:
+```typescript
+if (name === 'get_learning_context') {
+  const startTime = performance.now();
+  const { learning_id, include_metadata = false } = args;
+
+  // Get learning
+  const learning = learningRepo.findById(learning_id);
+  if (!learning) {
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ error: 'Learning not found' }) }],
+      isError: true
+    };
+  }
+
+  // Get conversation
+  const conversation = conversationRepo.findById(learning.conversation_id);
+  if (!conversation) {
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ error: 'Conversation not found' }) }],
+      isError: true
+    };
+  }
+
+  // Get messages
+  const messages = db.prepare(`
+    SELECT * FROM messages
+    WHERE conversation_id = ?
+    ORDER BY sequence ASC
+  `).all(learning.conversation_id);
+
+  const duration = performance.now() - startTime;
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          learning: {
+            id: learning.id,
+            title: learning.title,
+            category: learning.category
+          },
+          conversation: include_metadata ? conversation : {
+            id: conversation.id,
+            created_at: conversation.created_at
+          },
+          messages: messages.map((m: any) => ({
+            role: m.role,
+            content: m.content,
+            sequence: m.sequence,
+            created_at: m.created_at,
+            ...(include_metadata && { metadata: JSON.parse(m.metadata || '{}') })
+          })),
+          query_time_ms: Math.round(duration)
+        }, null, 2)
+      }
+    ]
+  };
+}
+```
+
+**Performance Budget**: <200ms p95
+
+---
+
+## Resources
+
+Resources provide static or computed data that agents can read directly (without parameters).
+
+### Resource Registration
+
+```typescript
+function registerResourceHandlers(
+  server: Server,
+  learningRepo: LearningRepository,
+  config: MCPServerConfig
+): void {
+  // List available resources
+  server.setRequestHandler('resources/list', async () => {
+    return {
+      resources: [
+        {
+          uri: 'context://learnings/recent',
+          name: 'Recent Learnings',
+          description: 'Latest 20 learnings ordered by creation time',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'context://learnings/top-rated',
+          name: 'Top-Rated Learnings',
+          description: 'Top 20 learnings by confidence score',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'context://stats',
+          name: 'Network Statistics',
+          description: 'Global Context Network statistics',
+          mimeType: 'application/json'
+        }
+      ]
+    };
+  });
+
+  // Read resource contents
+  server.setRequestHandler('resources/read', async (request) => {
+    const { uri } = request.params;
+    const startTime = performance.now();
+
+    if (uri === 'context://learnings/recent') {
+      const learnings = learningRepo.findRecent(20);
+
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              learnings: learnings.map(l => ({
+                id: l.id,
+                title: l.title,
+                category: l.category,
+                confidence: l.confidence,
+                tags: l.tags,
+                created_at: l.created_at,
+                excerpt: truncate(l.content, 150)
+              })),
+              count: learnings.length,
+              generated_at: new Date().toISOString(),
+              query_time_ms: Math.round(performance.now() - startTime)
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    if (uri === 'context://learnings/top-rated') {
+      const learnings = learningRepo.findTopRated(20);
+
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              learnings: learnings.map(l => ({
+                id: l.id,
+                title: l.title,
+                category: l.category,
+                confidence: l.confidence,
+                tags: l.tags,
+                created_at: l.created_at,
+                excerpt: truncate(l.content, 150)
+              })),
+              count: learnings.length,
+              generated_at: new Date().toISOString(),
+              query_time_ms: Math.round(performance.now() - startTime)
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    if (uri === 'context://stats') {
+      if (!config.enableStats) {
+        throw new Error('Statistics disabled');
+      }
+
+      const stats = db.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM learnings) as total_learnings,
+          (SELECT COUNT(*) FROM conversations) as total_conversations,
+          (SELECT COUNT(*) FROM messages) as total_messages,
+          (SELECT AVG(confidence) FROM learnings) as avg_confidence,
+          (SELECT COUNT(DISTINCT category) FROM learnings) as categories_count,
+          (SELECT created_at FROM learnings ORDER BY created_at DESC LIMIT 1) as latest_learning_at
+      `).get();
+
+      const categoryBreakdown = db.prepare(`
+        SELECT category, COUNT(*) as count
+        FROM learnings
+        GROUP BY category
+        ORDER BY count DESC
+      `).all();
+
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              statistics: stats,
+              category_breakdown: categoryBreakdown,
+              generated_at: new Date().toISOString(),
+              query_time_ms: Math.round(performance.now() - startTime)
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    throw new Error(`Unknown resource URI: ${uri}`);
+  });
+}
+```
+
+---
+
+## Query Optimization
+
+### Database Indexes
+
+**Required Indexes** (from STANDARDS.md schema):
+```sql
+-- learnings table
+CREATE INDEX idx_learnings_conversation ON learnings(conversation_id);
+CREATE INDEX idx_learnings_category ON learnings(category, confidence DESC);
+CREATE INDEX idx_learnings_confidence ON learnings(confidence DESC);
+CREATE INDEX idx_learnings_created ON learnings(created_at DESC);
+CREATE INDEX idx_learnings_dedupe ON learnings(dedupe_hash);
+
+-- FTS5 for full-text search
+CREATE VIRTUAL TABLE learnings_fts USING fts5(
+  learning_id UNINDEXED,
+  title,
+  content,
+  tags,
+  content='learnings',
+  content_rowid='rowid'
+);
+```
+
+### Query Plans
+
+**Verify with EXPLAIN**:
+```typescript
+// Verify search_learnings uses FTS index
+const plan = db.prepare(`
+  EXPLAIN QUERY PLAN
+  SELECT l.*
+  FROM learnings l
+  JOIN learnings_fts fts ON l.rowid = fts.rowid
+  WHERE fts MATCH ?
+    AND l.confidence >= ?
+  ORDER BY bm25(fts), l.confidence DESC
+  LIMIT ?
+`).all('test query', 0.6, 10);
+
+console.log('Query plan:', plan);
+// Should show: "SCAN learnings_fts VIRTUAL TABLE INDEX"
+```
+
+### Performance Monitoring
+
+```typescript
+import { performance } from 'node:perf_hooks';
+
+interface QueryMetrics {
+  tool_name: string;
+  duration_ms: number;
+  result_count: number;
+  timestamp: string;
+}
+
+const queryMetrics: QueryMetrics[] = [];
+
+function recordQueryMetric(metric: QueryMetrics): void {
+  queryMetrics.push(metric);
+
+  // Log slow queries
+  if (metric.duration_ms > 200) {
+    console.warn(`[MCP] Slow query: ${metric.tool_name} took ${metric.duration_ms.toFixed(2)}ms`);
+  }
+
+  // Keep last 1000 metrics
+  if (queryMetrics.length > 1000) {
+    queryMetrics.shift();
+  }
+}
+
+// Calculate p95
+function getP95Latency(): number {
+  if (queryMetrics.length === 0) return 0;
+
+  const sorted = queryMetrics
+    .map(m => m.duration_ms)
+    .sort((a, b) => a - b);
+
+  const p95Index = Math.floor(sorted.length * 0.95);
+  return sorted[p95Index];
+}
+```
+
+### Tag Filtering Optimization
+
+**Efficient tag AND filtering**:
+```typescript
+// For tags=['typescript', 'testing'], generate SQL
+function buildTagFilter(tags: string[]): { sql: string; params: any[] } {
+  if (tags.length === 0) {
+    return { sql: '', params: [] };
+  }
+
+  // Use JSON array contains checks
+  const conditions = tags.map(() => `json_each.value = ?`);
+  const sql = `
+    AND (
+      SELECT COUNT(DISTINCT json_each.value)
+      FROM json_each(l.tags)
+      WHERE ${conditions.join(' OR ')}
+    ) = ?
+  `;
+
+  return { sql, params: [...tags, tags.length] };
+}
+
+// Usage
+const tagFilter = buildTagFilter(tags);
+const query = `
+  SELECT l.*
+  FROM learnings l
+  JOIN learnings_fts fts ON l.rowid = fts.rowid
+  WHERE fts MATCH ?
+    AND l.confidence >= ?
+    ${tagFilter.sql}
+  ORDER BY bm25(fts), l.confidence DESC
+  LIMIT ? OFFSET ?
+`;
+
+const results = db.prepare(query).all(
+  searchQuery,
+  minConfidence,
+  ...tagFilter.params,
+  limit,
+  offset
+);
+```
+
+---
+
+## Security Model
+
+### Local-Only Binding
+
+**Default**: Bind to `127.0.0.1` only (no network access)
+
+```typescript
+export interface MCPServerConfig {
+  bindAddress?: string; // Default: '127.0.0.1'
+  // ...
+}
+
+// Only allow localhost
+if (config.bindAddress && config.bindAddress !== '127.0.0.1') {
+  throw new Error('Remote binding not allowed in MVP. Use 127.0.0.1 only.');
+}
+```
+
+### Optional Authentication
+
+**API Key Auth** (for future HTTP transport):
+```typescript
+function authenticateRequest(authToken: string | undefined, config: MCPServerConfig): void {
+  if (!config.authToken) {
+    return; // Auth disabled
+  }
+
+  if (!authToken || authToken !== config.authToken) {
+    throw new Error('Unauthorized: Invalid auth token');
+  }
+}
+
+// Usage in handlers
+server.setRequestHandler('tools/call', async (request) => {
+  const authHeader = request.params._meta?.authToken;
+  authenticateRequest(authHeader, config);
+
+  // ... process request
+});
+```
+
+### Read-Only Database
+
+**Prevent writes**:
+```typescript
+const db = new Database(config.dbPath, {
+  readonly: true // Enforces read-only at SQLite level
+});
+
+db.pragma('query_only = ON'); // Extra safety
+```
+
+### Input Validation
+
+**Sanitize all inputs**:
+```typescript
+function validateSearchQuery(query: string): void {
+  if (query.length > 1000) {
+    throw new Error('Query too long (max 1000 characters)');
+  }
+
+  // Prevent malicious FTS queries
+  const dangerousPatterns = [
+    /UNION/i,
+    /DROP/i,
+    /DELETE/i,
+    /INSERT/i,
+    /UPDATE/i,
+    /;/
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(query)) {
+      throw new Error('Invalid query: contains forbidden pattern');
+    }
+  }
+}
+```
+
+### Rate Limiting
+
+**Simple token bucket**:
+```typescript
+class RateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per second
+
+  constructor(maxTokens = 100, refillRate = 10) {
+    this.maxTokens = maxTokens;
+    this.refillRate = refillRate;
+    this.tokens = maxTokens;
+    this.lastRefill = Date.now();
+  }
+
+  tryAcquire(): boolean {
+    this.refill();
+
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return true;
+    }
+
+    return false;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    const tokensToAdd = elapsed * this.refillRate;
+
+    this.tokens = Math.min(this.maxTokens, this.tokens + tokensToAdd);
+    this.lastRefill = now;
+  }
+}
+
+const rateLimiter = new RateLimiter(100, 10); // 100 max, 10/sec refill
+
+// Usage
+if (!rateLimiter.tryAcquire()) {
+  throw new Error('Rate limit exceeded. Try again later.');
+}
+```
+
+---
+
+## Server Entry Point
+
+**File**: `src/mcp/index.ts`
+
+```typescript
+#!/usr/bin/env node
+import { createMCPServer } from './server.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import path from 'path';
+
+async function main(): Promise<void> {
+  const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'context.db');
+
+  const config = {
+    name: 'global-context-learnings',
+    version: '1.0.0',
+    dbPath,
+    bindAddress: '127.0.0.1',
+    maxResultsPerQuery: 100,
+    enableStats: true
+  };
+
+  const server = await createMCPServer(config);
+
+  // Use stdio transport for Claude Code
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  console.error('[MCP] Global Context Learnings server started');
+  console.error('[MCP] Database:', dbPath);
+  console.error('[MCP] Listening on stdio...');
+}
+
+main().catch((error) => {
+  console.error('[MCP] Fatal error:', error);
+  process.exit(1);
+});
+```
+
+**Build and Run**:
+```bash
+# Compile TypeScript
+npx tsc src/mcp/index.ts --outDir dist/mcp
+
+# Run server
+node dist/mcp/index.js
+
+# Or via npm script
+npm run mcp:start
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+**Test tool handlers**:
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createMCPServer } from '../src/mcp/server.js';
+import Database from 'better-sqlite3';
+
+describe('MCP Server - search_learnings', () => {
+  let db: Database.Database;
+  let server: Server;
+
+  beforeEach(async () => {
+    // In-memory database with test data
+    db = new Database(':memory:');
+
+    // Run migrations
+    await runMigrations(db);
+
+    // Seed test data
+    db.prepare(`
+      INSERT INTO learnings (id, conversation_id, category, title, content, confidence, tags, dedupe_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'test-learning-1',
+      'test-conv-1',
+      'best_practice',
+      'Use Vitest for TypeScript',
+      'Vitest is faster than Jest for TypeScript projects...',
+      0.85,
+      JSON.stringify(['typescript', 'testing', 'vitest']),
+      'dedupe-hash-1'
+    );
+
+    // Create FTS entry
+    db.prepare(`
+      INSERT INTO learnings_fts (rowid, learning_id, title, content, tags)
+      SELECT rowid, id, title, content, tags FROM learnings WHERE id = ?
+    `).run('test-learning-1');
+
+    server = await createMCPServer({
+      name: 'test-server',
+      version: '1.0.0',
+      dbPath: ':memory:',
+      db // Pass in-memory db for testing
+    });
+  });
+
+  it('should search learnings by query', async () => {
+    const result = await server.callTool('search_learnings', {
+      query: 'vitest typescript',
+      min_confidence: 0.8,
+      limit: 10
+    });
+
+    expect(result.content[0].type).toBe('text');
+
+    const data = JSON.parse(result.content[0].text);
+    expect(data.results).toHaveLength(1);
+    expect(data.results[0].title).toBe('Use Vitest for TypeScript');
+    expect(data.query_time_ms).toBeLessThan(200);
+  });
+
+  it('should filter by category', async () => {
+    const result = await server.callTool('search_learnings', {
+      query: 'typescript',
+      category: 'best_practice',
+      limit: 10
+    });
+
+    const data = JSON.parse(result.content[0].text);
+    expect(data.results.every((r: any) => r.category === 'best_practice')).toBe(true);
+  });
+
+  it('should filter by tags', async () => {
+    const result = await server.callTool('search_learnings', {
+      query: 'testing',
+      tags: ['typescript', 'vitest'],
+      limit: 10
+    });
+
+    const data = JSON.parse(result.content[0].text);
+    expect(data.results[0].tags).toContain('typescript');
+    expect(data.results[0].tags).toContain('vitest');
+  });
+
+  it('should enforce pagination', async () => {
+    // Seed 30 learnings
+    for (let i = 0; i < 30; i++) {
+      // ... insert learnings
+    }
+
+    const page1 = await server.callTool('search_learnings', {
+      query: 'test',
+      limit: 10,
+      offset: 0
+    });
+
+    const page2 = await server.callTool('search_learnings', {
+      query: 'test',
+      limit: 10,
+      offset: 10
+    });
+
+    const data1 = JSON.parse(page1.content[0].text);
+    const data2 = JSON.parse(page2.content[0].text);
+
+    expect(data1.results).toHaveLength(10);
+    expect(data2.results).toHaveLength(10);
+    expect(data1.results[0].id).not.toBe(data2.results[0].id);
+  });
+
+  it('should meet performance budget (<200ms)', async () => {
+    const start = performance.now();
+
+    await server.callTool('search_learnings', {
+      query: 'vitest',
+      limit: 10
+    });
+
+    const duration = performance.now() - start;
+    expect(duration).toBeLessThan(200);
+  });
+});
+```
+
+### Integration Tests
+
+**Test with real Claude Code client**:
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
+
+describe('MCP Server - Integration', () => {
+  it('should connect and query via stdio', async () => {
+    // Spawn MCP server
+    const serverProcess = spawn('node', ['./dist/mcp/index.js'], {
+      env: { DB_PATH: './test-fixtures/test.db' }
+    });
+
+    // Create client
+    const transport = new StdioClientTransport({
+      command: 'node',
+      args: ['./dist/mcp/index.js'],
+      env: { DB_PATH: './test-fixtures/test.db' }
+    });
+
+    const client = new Client({
+      name: 'test-client',
+      version: '1.0.0'
+    }, {
+      capabilities: {}
+    });
+
+    await client.connect(transport);
+
+    // List tools
+    const tools = await client.listTools();
+    expect(tools.tools.some(t => t.name === 'search_learnings')).toBe(true);
+
+    // Call tool
+    const result = await client.callTool('search_learnings', {
+      query: 'test',
+      limit: 5
+    });
+
+    expect(result.content[0].type).toBe('text');
+
+    // Cleanup
+    await client.close();
+    serverProcess.kill();
+  });
+});
+```
+
+### Performance Tests
+
+**Load testing**:
+```typescript
+import { performance } from 'node:perf_hooks';
+
+describe('MCP Server - Performance', () => {
+  it('should handle 100 concurrent queries', async () => {
+    const queries = Array(100).fill(null).map((_, i) =>
+      server.callTool('search_learnings', {
+        query: `test query ${i}`,
+        limit: 10
+      })
+    );
+
+    const start = performance.now();
+    const results = await Promise.all(queries);
+    const duration = performance.now() - start;
+
+    expect(results).toHaveLength(100);
+    expect(duration).toBeLessThan(5000); // 100 queries in <5s
+  });
+
+  it('should maintain p95 latency <200ms under load', async () => {
+    const latencies: number[] = [];
+
+    for (let i = 0; i < 1000; i++) {
+      const start = performance.now();
+
+      await server.callTool('search_learnings', {
+        query: 'typescript testing',
+        limit: 10
+      });
+
+      latencies.push(performance.now() - start);
+    }
+
+    latencies.sort((a, b) => a - b);
+    const p95 = latencies[Math.floor(latencies.length * 0.95)];
+
+    expect(p95).toBeLessThan(200);
+  });
+});
+```
+
+---
+
+## Deployment
+
+### Package.json Scripts
+
+```json
+{
+  "scripts": {
+    "mcp:build": "tsc src/mcp/index.ts --outDir dist/mcp",
+    "mcp:start": "node dist/mcp/index.js",
+    "mcp:dev": "tsx watch src/mcp/index.ts",
+    "mcp:test": "vitest run src/mcp/**/*.test.ts"
+  }
+}
+```
+
+### Claude Code Configuration
+
+**File**: `.claude/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "global-context-learnings": {
+      "command": "node",
+      "args": ["./dist/mcp/index.js"],
+      "env": {
+        "DB_PATH": "./context.db",
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+```
+
+### Monitoring
+
+**Health check endpoint** (future HTTP transport):
+```typescript
+app.get('/health', (req, res) => {
+  const isHealthy = db.prepare('SELECT 1').get();
+
+  res.json({
+    status: isHealthy ? 'healthy' : 'unhealthy',
+    uptime_seconds: process.uptime(),
+    p95_latency_ms: getP95Latency(),
+    total_queries: queryMetrics.length
+  });
+});
+```
+
+---
+
+## Performance Budget Summary
+
+| Operation | Budget | Measurement |
+|-----------|--------|-------------|
+| search_learnings | <200ms p95 | FTS5 query + filters + serialization |
+| get_learning_by_id | <50ms p95 | Primary key lookup |
+| get_learning_context | <200ms p95 | Join + messages fetch |
+| Resource reads | <100ms p95 | Indexed queries |
+| Server startup | <1s | Database connection + index load |
+
+---
+
+## Related Documents
+
+### Standards
+- [STANDARDS.md](../STANDARDS.md) - Canonical schema, status enums, ULID, performance budgets
+
+### Architecture
+- [Global Context Network](./architecture-global-context-network-2025-01-16.md) - System overview
+- [Database Schema](../reference/reference-database-schema-2025-01-16.md) - learnings table, FTS5 indexes
+
+### Reference
+- [Claude Agent SDK API](../reference/reference-claude-agent-sdk-api-2025-01-16.md) - MCP integration patterns
+
+### Guides
+- [Phase 6 Tasks](../plans/plan-phase-6-tasks-2025-01-16.md) - MCP server implementation tasks
+
+---
+
+## Appendix: MCP SDK Compliance
+
+### Tools Schema Compliance
+
+**Required Fields**:
+- `name`: Tool identifier (kebab-case)
+- `description`: Human-readable description
+- `inputSchema`: JSON Schema (draft-07)
+
+**Example**:
+```typescript
+{
+  name: 'search_learnings',
+  description: 'Search learnings using full-text search',
+  inputSchema: {
+    type: 'object',
+    properties: { /* ... */ },
+    required: ['query']
+  }
+}
+```
+
+### Resources Schema Compliance
+
+**Required Fields**:
+- `uri`: Unique resource identifier (custom scheme)
+- `name`: Human-readable name
+- `description`: Resource description
+- `mimeType`: Content type (e.g., 'application/json')
+
+**Example**:
+```typescript
+{
+  uri: 'context://learnings/recent',
+  name: 'Recent Learnings',
+  description: 'Latest 20 learnings',
+  mimeType: 'application/json'
+}
+```
+
+### Response Format
+
+**Tool Call Response**:
+```typescript
+{
+  content: [
+    {
+      type: 'text',
+      text: '{"results": [...]}' // JSON string
+    }
+  ],
+  isError?: boolean // Optional error flag
+}
+```
+
+**Resource Read Response**:
+```typescript
+{
+  contents: [
+    {
+      uri: 'context://learnings/recent',
+      mimeType: 'application/json',
+      text: '{"learnings": [...]}'
+    }
+  ]
+}
+```
+
+---
+
+**Document Status**: Active - Implementation-ready with complete schemas, performance plans, and security model
+
+**Next Steps**:
+1. Get external review (GPT-5) to validate MCP SDK compliance
+2. Implement server.ts with tool and resource handlers
+3. Add comprehensive tests (unit, integration, performance)
+4. Validate <200ms p95 latency with real database
+5. Document Claude Code discovery integration
+</file>
+
+<file path="docs/reference/reference-claude-agent-sdk-api-2025-01-16.md">
+# Claude Agent SDK API Reference
+
+> Complete API reference for Claude Agent SDK with subagent patterns and MCP integration
+
+---
+title: Claude Agent SDK API Reference
+category: reference
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [claude-agent-sdk, api, subagents, mcp, typescript]
+applies_to: Claude Agent SDK 1.x, Sonnet 4.5, Haiku 3.5
+---
+
+## Overview
+
+The Claude Agent SDK enables building AI agents with specialized subagents, MCP tool integration, and structured workflows. This document provides complete API reference and best practices.
+
+**Package**: `@anthropic-ai/claude-agent-sdk` (verify actual package name)
+**Models**: `claude-sonnet-4-5-20250929`, `claude-haiku-3-5-20250318`
+
+---
+
+## Core API
+
+### query()
+
+Main entry point for delegating tasks to subagents.
+
+**Signature**:
+```typescript
+function query(options: QueryOptions): AsyncIterable<Message>;
+
+interface QueryOptions {
+  prompt: string;
+  options?: {
+    model?: string;
+    agents?: Record<string, AgentDefinition>;
+    mcpServers?: Record<string, MCPServerConfig>;
+    maxTokens?: number;
+    temperature?: number;
+    abortSignal?: AbortSignal;
+  };
+}
+```
+
+**Parameters**:
+- `prompt` (required): Main task description
+- `options.model`: Model ID (default: `claude-sonnet-4-5-20250929`)
+- `options.agents`: Subagent definitions (see AgentDefinition)
+- `options.mcpServers`: MCP server configurations
+- `options.maxTokens`: Token budget (default: 4096)
+- `options.temperature`: Randomness 0-1 (default: 1.0)
+- `options.abortSignal`: Cancellation signal
+
+**Returns**: Async iterable of messages
+
+**Example**:
+```typescript
+import { query } from '@anthropic-ai/claude-agent-sdk';
+
+const response = query({
+  prompt: 'Implement user authentication',
+  options: {
+    model: 'claude-sonnet-4-5-20250929',
+    agents: {
+      'implementation-agent': {
+        description: 'Implements authentication logic',
+        model: 'sonnet',
+        tools: ['Write', 'Read', 'Bash'],
+        prompt: 'You are an authentication expert...'
+      }
+    }
+  }
+});
+
+for await (const message of response) {
+  if (message.type === 'text') {
+    console.log(message.content);
+  }
+}
+```
+
+---
+
+### Message Types
+
+**Event Stream Format**:
+```typescript
+type Message =
+  | TextMessage
+  | ToolCallMessage
+  | ToolResultMessage
+  | SubagentStartMessage
+  | SubagentProgressMessage
+  | SubagentEndMessage
+  | ErrorMessage
+  | LogMessage;
+
+interface TextMessage {
+  type: 'text';
+  content: string;
+  role: 'user' | 'assistant';
+  correlation_id?: string;
+}
+
+interface ToolCallMessage {
+  type: 'tool_call';
+  tool_name: string;
+  tool_input: any;
+  tool_call_id: string;
+  correlation_id?: string;
+}
+
+interface ToolResultMessage {
+  type: 'tool_result';
+  tool_call_id: string;
+  result: any;
+  error?: string;
+  correlation_id?: string;
+}
+
+interface SubagentStartMessage {
+  type: 'system';
+  subtype: 'subagent_start';
+  agent_name: string;
+  agent_description: string;
+  correlation_id: string;
+  timestamp: string;
+}
+
+interface SubagentProgressMessage {
+  type: 'system';
+  subtype: 'subagent_progress';
+  agent_name: string;
+  progress: number; // 0-1
+  message: string;
+  correlation_id: string;
+  timestamp: string;
+}
+
+interface SubagentEndMessage {
+  type: 'system';
+  subtype: 'subagent_end';
+  agent_name: string;
+  result: any;
+  success: boolean;
+  error?: string;
+  correlation_id: string;
+  timestamp: string;
+  duration_ms: number;
+}
+
+interface ErrorMessage {
+  type: 'error';
+  error_type: string; // 'api_error' | 'tool_error' | 'timeout' | 'rate_limit'
+  error_message: string;
+  error_code?: string;
+  correlation_id?: string;
+  retry_after_ms?: number; // For rate limits
+}
+
+interface LogMessage {
+  type: 'log';
+  level: 'debug' | 'info' | 'warn' | 'error';
+  message: string;
+  correlation_id?: string;
+  metadata?: any;
+}
+```
+
+---
+
+## Subagent Configuration
+
+### AgentDefinition
+
+```typescript
+interface AgentDefinition {
+  name?: string; // Auto-set from key if not provided
+  description: string; // What this agent does
+  model: 'sonnet' | 'haiku' | string; // Model selection
+  tools: string[]; // Available tool names
+  resources?: string[]; // MCP resources
+  prompt: string; // System prompt for agent
+  output_schema?: JSONSchema; // Expected output format
+  temperature?: number; // 0-1, default 1.0
+  max_tokens?: number; // Token budget
+  stop_sequences?: string[]; // Stop generation at these
+  timeout_ms?: number; // Max execution time
+  retry_policy?: RetryPolicy;
+  metadata?: any; // Custom metadata
+}
+
+interface RetryPolicy {
+  max_retries: number; // Default 3
+  initial_delay_ms: number; // Default 1000
+  max_delay_ms: number; // Default 60000
+  backoff_multiplier: number; // Default 2 (exponential)
+}
+
+interface JSONSchema {
+  type: 'object' | 'array' | 'string' | 'number' | 'boolean';
+  properties?: Record<string, JSONSchema>;
+  items?: JSONSchema;
+  required?: string[];
+  enum?: any[];
+  // ... standard JSON Schema fields
+}
+```
+
+**Example: Implementation Agent**:
+```typescript
+const implementationAgent: AgentDefinition = {
+  description: 'Implements TypeScript functions following TDD',
+  model: 'sonnet',
+  tools: ['Write', 'Read', 'Bash'],
+  prompt: `You are a TypeScript implementation expert.
+
+REQUIREMENTS:
+- Write type-safe code with strict mode
+- Never use "any" types
+- Follow TDD: tests exist before implementation
+- Handle errors gracefully
+- Add JSDoc comments
+
+OUTPUT FORMAT:
+Return JSON with:
+- files_created: string[]
+- tests_passing: boolean
+- coverage_percentage: number
+`,
+  output_schema: {
+    type: 'object',
+    properties: {
+      files_created: { type: 'array', items: { type: 'string' } },
+      tests_passing: { type: 'boolean' },
+      coverage_percentage: { type: 'number' }
+    },
+    required: ['files_created', 'tests_passing']
+  },
+  temperature: 0.7, // Slightly more focused
+  max_tokens: 8192,
+  timeout_ms: 120000, // 2 minutes
+  retry_policy: {
+    max_retries: 3,
+    initial_delay_ms: 1000,
+    max_delay_ms: 30000,
+    backoff_multiplier: 2
+  }
+};
+```
+
+**Example: Test Generator**:
+```typescript
+const testGenerator: AgentDefinition = {
+  description: 'Generates comprehensive unit tests',
+  model: 'sonnet',
+  tools: ['Write', 'Read', 'mcp__test-runner__run_unit_tests'],
+  prompt: `You are a test generation expert.
+
+Generate unit tests with:
+- Arrange-Act-Assert pattern
+- Edge cases (null, undefined, empty, boundary values)
+- Error conditions
+- Clear test names
+- Proper mocking
+
+TARGET: >85% coverage with high-quality tests
+`,
+  output_schema: {
+    type: 'object',
+    properties: {
+      test_files: { type: 'array', items: { type: 'string' } },
+      coverage: { type: 'number' },
+      test_count: { type: 'number' }
+    },
+    required: ['test_files', 'coverage']
+  },
+  max_tokens: 16384, // More for comprehensive tests
+  timeout_ms: 180000 // 3 minutes
+};
+```
+
+---
+
+## MCP Integration
+
+### MCPServerConfig
+
+```typescript
+interface MCPServerConfig {
+  name: string;
+  command: string; // Executable path
+  args?: string[]; // Command arguments
+  env?: Record<string, string>; // Environment variables
+  capabilities?: {
+    tools?: boolean;
+    resources?: boolean;
+    prompts?: boolean;
+  };
+  timeout_ms?: number;
+}
+```
+
+**Example: Test Runner MCP Server**:
+```typescript
+const testRunnerServer: MCPServerConfig = {
+  name: 'test-runner',
+  command: 'node',
+  args: ['./mcp-servers/test-runner/index.js'],
+  env: {
+    NODE_ENV: 'test'
+  },
+  capabilities: {
+    tools: true,
+    resources: true
+  },
+  timeout_ms: 30000
+};
+
+// Use in query
+const response = query({
+  prompt: 'Run unit tests',
+  options: {
+    mcpServers: {
+      'test-runner': testRunnerServer
+    }
+  }
+});
+```
+
+### MCP Tool Definition
+
+```typescript
+// In your MCP server (test-runner/index.js)
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
+const server = new Server({
+  name: 'test-runner',
+  version: '1.0.0'
+}, {
+  capabilities: {
+    tools: {},
+    resources: {}
+  }
+});
+
+// Define tools
+server.setRequestHandler('tools/list', async () => {
+  return {
+    tools: [
+      {
+        name: 'run_unit_tests',
+        description: 'Runs unit tests and returns results',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            test_pattern: {
+              type: 'string',
+              description: 'Test file pattern (e.g., "**/*.test.ts")'
+            },
+            watch: {
+              type: 'boolean',
+              description: 'Run in watch mode',
+              default: false
+            }
+          }
+        }
+      },
+      {
+        name: 'get_coverage_report',
+        description: 'Returns coverage report',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      }
+    ]
+  };
+});
+
+// Implement tool calls
+server.setRequestHandler('tools/call', async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'run_unit_tests') {
+    const { test_pattern = '**/*.test.ts', watch = false } = args;
+
+    // Run tests
+    const result = await runVitest({ pattern: test_pattern, watch });
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            total: result.total,
+            passed: result.passed,
+            failed: result.failed,
+            duration_ms: result.duration,
+            coverage: result.coverage
+          }, null, 2)
+        }
+      ]
+    };
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
+});
+
+// Start server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+### MCP Resource Definition
+
+```typescript
+// Define resources
+server.setRequestHandler('resources/list', async () => {
+  return {
+    resources: [
+      {
+        uri: 'test://coverage/summary',
+        name: 'Coverage Summary',
+        description: 'Current test coverage summary',
+        mimeType: 'application/json'
+      },
+      {
+        uri: 'test://results/latest',
+        name: 'Latest Test Results',
+        description: 'Most recent test run results',
+        mimeType: 'application/json'
+      }
+    ]
+  };
+});
+
+// Implement resource reads
+server.setRequestHandler('resources/read', async (request) => {
+  const { uri } = request.params;
+
+  if (uri === 'test://coverage/summary') {
+    const coverage = await getCoverageSummary();
+
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify(coverage, null, 2)
+        }
+      ]
+    };
+  }
+
+  throw new Error(`Unknown resource: ${uri}`);
+});
+```
+
+---
+
+## Execution Patterns
+
+### Parallel Execution
+
+When subagents have no dependencies, run them in parallel:
+
+```typescript
+const response = query({
+  prompt: 'Implement Phase 0 Foundation',
+  options: {
+    agents: {
+      'foundation-setup': foundationSetupAgent,
+      'database-schema': databaseSchemaAgent,
+      'test-infrastructure': testInfraAgent
+    }
+  }
+});
+
+const results: Record<string, any> = {};
+
+for await (const message of response) {
+  if (message.type === 'system' && message.subtype === 'subagent_end') {
+    results[message.agent_name] = message.result;
+    console.log(`✅ ${message.agent_name} completed in ${message.duration_ms}ms`);
+  }
+}
+
+// All three agents ran in parallel
+console.log('All agents complete:', results);
+```
+
+### Sequential with Dependencies
+
+When subagents depend on each other's outputs:
+
+```typescript
+// Step 1: Generate tests
+const testResult = await runSubagent('test-generator', {
+  function_name: 'detectAPIKeys',
+  requirements: 'Detect AWS, OpenAI, GitHub API keys'
+});
+
+// Step 2: Implement (needs test output)
+const implResult = await runSubagent('implementation-agent', {
+  tests: testResult.test_files,
+  requirements: 'Implement to pass tests'
+});
+
+// Step 3: Validate (needs both)
+const validationResult = await runSubagent('implementation-validator', {
+  implementation: implResult.files_created,
+  tests: testResult.test_files
+});
+
+// Helper function
+async function runSubagent(agentName: string, input: any): Promise<any> {
+  const response = query({
+    prompt: JSON.stringify(input),
+    options: {
+      agents: {
+        [agentName]: agentConfigs[agentName]
+      }
+    }
+  });
+
+  let result: any = null;
+
+  for await (const message of response) {
+    if (message.type === 'system' && message.subtype === 'subagent_end') {
+      result = message.result;
+    }
+  }
+
+  return result;
+}
+```
+
+### Fan-Out / Fan-In
+
+Run multiple subagents, then merge results:
+
+```typescript
+async function runValidators(code: string): Promise<ValidationReport> {
+  const response = query({
+    prompt: `Validate this code:\n${code}`,
+    options: {
+      agents: {
+        'code-quality': codeQualityValidator,
+        'security': securityValidator,
+        'performance': performanceValidator
+      }
+    }
+  });
+
+  const validationResults: Record<string, any> = {};
+
+  for await (const message of response) {
+    if (message.type === 'system' && message.subtype === 'subagent_end') {
+      validationResults[message.agent_name] = message.result;
+    }
+  }
+
+  // Merge results
+  return {
+    code_quality: validationResults['code-quality'],
+    security: validationResults['security'],
+    performance: validationResults['performance'],
+    overall_pass: Object.values(validationResults).every(r => r.passed)
+  };
+}
+```
+
+---
+
+## Error Handling
+
+### Error Types
+
+```typescript
+class APIError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status?: number
+  ) {
+    super(message);
+    this.name = 'APIError';
+  }
+}
+
+class ToolError extends Error {
+  constructor(
+    message: string,
+    public tool_name: string,
+    public tool_input: any
+  ) {
+    super(message);
+    this.name = 'ToolError';
+  }
+}
+
+class TimeoutError extends Error {
+  constructor(
+    message: string,
+    public timeout_ms: number
+  ) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+class RateLimitError extends Error {
+  constructor(
+    message: string,
+    public retry_after_ms: number
+  ) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+```
+
+### Retry Logic
+
+```typescript
+async function queryWithRetry(
+  options: QueryOptions,
+  maxRetries = 3
+): Promise<any> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = query(options);
+      let result: any = null;
+
+      for await (const message of response) {
+        if (message.type === 'error') {
+          throw new APIError(
+            message.error_message,
+            message.error_code || 'unknown',
+            message.retry_after_ms
+          );
+        }
+
+        if (message.type === 'system' && message.subtype === 'subagent_end') {
+          if (!message.success) {
+            throw new Error(message.error || 'Subagent failed');
+          }
+          result = message.result;
+        }
+      }
+
+      return result;
+
+    } catch (error) {
+      lastError = error as Error;
+
+      // Don't retry on validation errors
+      if (error instanceof Error && error.message.includes('validation')) {
+        throw error;
+      }
+
+      // Rate limit: wait before retry
+      if (error instanceof RateLimitError) {
+        await sleep(error.retry_after_ms);
+        continue;
+      }
+
+      // Exponential backoff
+      const backoffMs = Math.min(1000 * Math.pow(2, attempt), 60000);
+      await sleep(backoffMs);
+    }
+  }
+
+  throw lastError || new Error('Max retries exceeded');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+```
+
+### Graceful Degradation
+
+```typescript
+async function sanitizeWithFallback(content: string): Promise<string> {
+  try {
+    // Try AI sanitization first
+    const result = await runSubagent('ai-sanitizer', { content });
+    return result.sanitized_content;
+
+  } catch (error) {
+    console.warn('AI sanitization failed, falling back to rules:', error);
+
+    // Fallback to rule-based
+    const result = await runSubagent('rule-sanitizer', { content });
+    return result.sanitized_content;
+  }
+}
+```
+
+---
+
+## Best Practices
+
+### When to Use Subagents
+
+**✅ Use subagents for**:
+- Complex, multi-step tasks
+- Tasks requiring specialized expertise
+- Tasks that can run in parallel
+- Tasks requiring different model sizes (Sonnet vs Haiku)
+- Tasks needing different tool sets
+
+**❌ Don't use subagents for**:
+- Simple, single-step operations
+- Tasks where delegation overhead > task complexity
+- Tightly coupled operations better done in one context
+
+### Model Selection
+
+**Sonnet (claude-sonnet-4-5)**:
+- Complex reasoning
+- Code generation
+- Architecture decisions
+- Creative tasks
+- Quality validation
+
+**Haiku (claude-haiku-3-5)**:
+- Simple transformations
+- Format conversions
+- Quick validations
+- High-volume operations
+- Cost-sensitive tasks
+
+**Example**:
+```typescript
+const agents = {
+  // Sonnet for complex implementation
+  'implementation': {
+    model: 'claude-sonnet-4-5-20250929',
+    description: 'Implements complex authentication logic',
+    // ...
+  },
+
+  // Haiku for simple validation
+  'coverage-checker': {
+    model: 'claude-haiku-3-5-20250318',
+    description: 'Checks if coverage >= 85%',
+    // ...
+  }
+};
+```
+
+### Output Schema Validation
+
+Always validate subagent outputs:
+
+```typescript
+import Ajv from 'ajv';
+
+const ajv = new Ajv();
+
+async function runSubagentWithValidation(
+  agentName: string,
+  input: any,
+  expectedSchema: JSONSchema
+): Promise<any> {
+  const result = await runSubagent(agentName, input);
+
+  const validate = ajv.compile(expectedSchema);
+  if (!validate(result)) {
+    throw new Error(`Invalid output from ${agentName}: ${JSON.stringify(validate.errors)}`);
+  }
+
+  return result;
+}
+
+// Usage
+const result = await runSubagentWithValidation(
+  'implementation-agent',
+  { function: 'detectAPIKeys' },
+  {
+    type: 'object',
+    properties: {
+      files_created: { type: 'array', items: { type: 'string' } },
+      tests_passing: { type: 'boolean' }
+    },
+    required: ['files_created', 'tests_passing']
+  }
+);
+```
+
+### Correlation IDs
+
+Track execution across subagents:
+
+```typescript
+import { randomUUID } from 'crypto';
+
+async function runWithCorrelation(taskName: string, fn: () => Promise<any>): Promise<any> {
+  const correlationId = randomUUID();
+
+  console.log(`[${correlationId}] Starting: ${taskName}`);
+
+  try {
+    const result = await fn();
+    console.log(`[${correlationId}] Success: ${taskName}`);
+    return result;
+  } catch (error) {
+    console.error(`[${correlationId}] Failed: ${taskName}`, error);
+    throw error;
+  }
+}
+```
+
+### Cost Tracking
+
+Monitor token usage and costs:
+
+```typescript
+interface UsageStats {
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+const PRICING = {
+  'claude-sonnet-4-5': {
+    input: 0.003 / 1000,  // $3 per 1M input tokens
+    output: 0.015 / 1000  // $15 per 1M output tokens
+  },
+  'claude-haiku-3-5': {
+    input: 0.00025 / 1000,  // $0.25 per 1M input tokens
+    output: 0.00125 / 1000  // $1.25 per 1M output tokens
+  }
+};
+
+function calculateCost(usage: UsageStats, model: string): number {
+  const pricing = PRICING[model as keyof typeof PRICING];
+  if (!pricing) return 0;
+
+  return (
+    usage.input_tokens * pricing.input +
+    usage.output_tokens * pricing.output
+  );
+}
+
+async function runWithCostTracking(options: QueryOptions): Promise<{ result: any; cost: number }> {
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  const response = query(options);
+  let result: any = null;
+
+  for await (const message of response) {
+    // Track usage from messages
+    if ('usage' in message) {
+      totalInputTokens += message.usage?.input_tokens || 0;
+      totalOutputTokens += message.usage?.output_tokens || 0;
+    }
+
+    if (message.type === 'system' && message.subtype === 'subagent_end') {
+      result = message.result;
+    }
+  }
+
+  const cost = calculateCost(
+    {
+      total_tokens: totalInputTokens + totalOutputTokens,
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      cost_usd: 0
+    },
+    options.options?.model || 'claude-sonnet-4-5-20250929'
+  );
+
+  return { result, cost };
+}
+```
+
+---
+
+## Testing with SDK
+
+### Mocking the SDK
+
+```typescript
+import { vi } from 'vitest';
+
+export function mockQuery(responses: Array<Message[]>) {
+  let callCount = 0;
+
+  return vi.fn((options: QueryOptions) => {
+    const messages = responses[callCount] || [];
+    callCount++;
+
+    return (async function* () {
+      for (const message of messages) {
+        yield message;
+      }
+    })();
+  });
+}
+
+// Usage in tests
+it('should handle subagent success', async () => {
+  const mockQueryFn = mockQuery([
+    [
+      {
+        type: 'system',
+        subtype: 'subagent_start',
+        agent_name: 'test-agent',
+        correlation_id: '123',
+        timestamp: new Date().toISOString()
+      },
+      {
+        type: 'system',
+        subtype: 'subagent_end',
+        agent_name: 'test-agent',
+        result: { files_created: ['test.ts'] },
+        success: true,
+        correlation_id: '123',
+        timestamp: new Date().toISOString(),
+        duration_ms: 1000
+      }
+    ]
+  ]);
+
+  // Test your function that uses query()
+  const result = await myFunction(mockQueryFn);
+
+  expect(result).toEqual({ files_created: ['test.ts'] });
+});
+```
+
+### Testing MCP Servers
+
+```typescript
+import { createMockMCPServer } from '../helpers/mock-mcp-server';
+
+it('should call MCP tool correctly', async () => {
+  const mockServer = createMockMCPServer();
+
+  mockServer.addTool('run_unit_tests', async (args) => {
+    return {
+      total: 10,
+      passed: 10,
+      failed: 0
+    };
+  });
+
+  const response = query({
+    prompt: 'Run tests',
+    options: {
+      mcpServers: {
+        'test-runner': mockServer.config
+      }
+    }
+  });
+
+  // Assert tool was called
+  expect(mockServer.toolCalls['run_unit_tests']).toHaveLength(1);
+});
+```
+
+---
+
+## Complete Example
+
+### TDD Workflow with Subagents
+
+```typescript
+import { query } from '@anthropic-ai/claude-agent-sdk';
+
+interface TDDResult {
+  tests_created: string[];
+  implementation_created: string[];
+  all_tests_passing: boolean;
+  coverage: number;
+}
+
+async function implementFeatureTDD(
+  featureName: string,
+  requirements: string
+): Promise<TDDResult> {
+  console.log(`\n🔴 RED: Generating failing tests for ${featureName}...`);
+
+  // Step 1: Generate tests
+  const testGenResult = await runSubagent('test-generator', {
+    feature: featureName,
+    requirements
+  });
+
+  console.log(`✅ Tests created: ${testGenResult.test_files.join(', ')}`);
+
+  console.log(`\n🟢 GREEN: Implementing ${featureName}...`);
+
+  // Step 2: Implement
+  const implResult = await runSubagent('implementation-agent', {
+    feature: featureName,
+    requirements,
+    tests: testGenResult.test_files
+  });
+
+  console.log(`✅ Implementation created: ${implResult.files_created.join(', ')}`);
+
+  console.log(`\n🔵 REFACTOR: Validating quality...`);
+
+  // Step 3: Validate quality (parallel)
+  const validationResponse = query({
+    prompt: `Validate ${featureName} implementation`,
+    options: {
+      agents: {
+        'code-quality': codeQualityValidator,
+        'security': securityValidator,
+        'coverage': coverageValidator
+      }
+    }
+  });
+
+  const validations: Record<string, any> = {};
+
+  for await (const message of validationResponse) {
+    if (message.type === 'system' && message.subtype === 'subagent_end') {
+      validations[message.agent_name] = message.result;
+
+      if (!message.success) {
+        throw new Error(`${message.agent_name} failed: ${message.error}`);
+      }
+    }
+  }
+
+  console.log(`\n✅ All quality gates passed!`);
+
+  return {
+    tests_created: testGenResult.test_files,
+    implementation_created: implResult.files_created,
+    all_tests_passing: implResult.tests_passing,
+    coverage: validations['coverage'].percentage
+  };
+}
+
+// Agent configurations
+const testGenerator = {
+  description: 'Generates comprehensive unit tests',
+  model: 'sonnet',
+  tools: ['Write', 'Read'],
+  prompt: `Generate unit tests following TDD best practices...`,
+  output_schema: {
+    type: 'object',
+    properties: {
+      test_files: { type: 'array', items: { type: 'string' } },
+      test_count: { type: 'number' }
+    },
+    required: ['test_files']
+  }
+};
+
+const implementationAgent = {
+  description: 'Implements features to pass tests',
+  model: 'sonnet',
+  tools: ['Write', 'Read', 'Bash'],
+  prompt: `Implement features following TDD...`,
+  output_schema: {
+    type: 'object',
+    properties: {
+      files_created: { type: 'array', items: { type: 'string' } },
+      tests_passing: { type: 'boolean' }
+    },
+    required: ['files_created', 'tests_passing']
+  }
+};
+
+const codeQualityValidator = {
+  description: 'Validates code quality',
+  model: 'sonnet',
+  tools: ['Read', 'Bash'],
+  prompt: `Check code quality standards...`
+};
+
+const securityValidator = {
+  description: 'Scans for security issues',
+  model: 'sonnet',
+  tools: ['Read', 'Bash'],
+  prompt: `Scan for security vulnerabilities...`
+};
+
+const coverageValidator = {
+  description: 'Checks test coverage',
+  model: 'haiku', // Simple task
+  tools: ['Bash', 'Read'],
+  prompt: `Calculate test coverage percentage...`
+};
+
+// Usage
+const result = await implementFeatureTDD(
+  'API Key Detection',
+  'Detect AWS, OpenAI, and GitHub API keys in content'
+);
+
+console.log(JSON.stringify(result, null, 2));
+```
+
+---
+
+## Related Documents
+
+### Architecture
+- [Subagent System Architecture](../architecture/architecture-subagent-system-2025-01-16.md)
+- [Global Context Network](../architecture/architecture-global-context-network-2025-01-16.md)
+
+### Reference
+- [Subagent Types](./reference-subagent-types-2025-01-16.md)
+- [Testing Strategy](./reference-testing-strategy-2025-01-16.md)
+
+### Guides
+- [Using Subagents](../guides/guide-using-subagents-2025-01-16.md)
+- [TDD Workflow](../guides/guide-tdd-workflow-2025-01-16.md)
+</file>
+
+<file path="docs/reference/reference-database-schema-2025-01-16.md">
+# Database Schema Reference
+
+> Complete SQLite database schema with tables, indexes, migrations, and query patterns
+
+---
+title: Database Schema Reference
+category: reference
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [database, sqlite, schema, migrations, sql]
+applies_to: SQLite 3.40+, better-sqlite3 9.x
+schema_version: 1.0.0
+---
+
+## Overview
+
+The Global Context Network uses SQLite with WAL mode for local persistence. All data MUST be sanitized before insertion - there are NO raw content columns.
+
+**Core Principle**: Never store unsanitized data. Sanitization happens BEFORE database insertion.
+
+### Database Configuration
+
+```sql
+-- Required PRAGMAs (set on every connection)
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = FULL;
+PRAGMA busy_timeout = 5000;
+PRAGMA page_size = 8192;
+```
+
+### Connection Setup
+
+```typescript
+import Database from 'better-sqlite3';
+
+export function createDatabase(path: string): Database.Database {
+  const db = new Database(path);
+
+  // Enable required PRAGMAs
+  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = FULL');
+  db.pragma('busy_timeout = 5000');
+
+  return db;
+}
+```
+
+---
+
+## Tables
+
+### conversations
+
+Stores sanitized conversation metadata.
+
+```sql
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  session_id TEXT NOT NULL, -- Claude Code session identifier
+  correlation_id TEXT NOT NULL UNIQUE, -- For tracking conversation flow
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  completed_at TEXT, -- When conversation ended
+  sanitized BOOLEAN NOT NULL DEFAULT 1 CHECK (sanitized = 1), -- ALWAYS true
+  sanitization_version TEXT NOT NULL, -- e.g., "1.0.0"
+  message_count INTEGER NOT NULL DEFAULT 0,
+  metadata JSON -- Additional context (project path, user settings, etc.)
+);
+
+-- Indexes
+CREATE INDEX idx_conversations_session ON conversations(session_id);
+CREATE INDEX idx_conversations_created ON conversations(created_at DESC);
+CREATE INDEX idx_conversations_correlation ON conversations(correlation_id);
+
+-- Triggers for updated_at
+CREATE TRIGGER conversations_updated_at
+AFTER UPDATE ON conversations
+FOR EACH ROW
+BEGIN
+  UPDATE conversations SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique conversation identifier (ULID recommended for sortability)
+- `session_id`: Claude Code session ID for grouping
+- `correlation_id`: Unique ID for tracking across systems
+- `created_at`: When conversation started (auto-set)
+- `updated_at`: Last modification (auto-updated via trigger)
+- `completed_at`: When conversation ended (NULL if ongoing)
+- `sanitized`: MUST always be 1 (enforced by CHECK constraint)
+- `sanitization_version`: Version of sanitization rules applied
+- `message_count`: Cached count (updated via trigger)
+- `metadata`: JSON for flexible additional data
+
+**Performance Considerations**:
+- `session_id` index for session queries
+- `created_at DESC` index for recent conversations
+- `correlation_id` unique index for lookups
+
+---
+
+### messages
+
+Stores individual sanitized messages within conversations.
+
+```sql
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  conversation_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL, -- SANITIZED content only
+  content_hash TEXT NOT NULL, -- SHA-256 hash for deduplication
+  sequence INTEGER NOT NULL, -- Order within conversation (0, 1, 2, ...)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  token_count INTEGER, -- Approximate token count
+  metadata JSON, -- Thinking, tool calls, etc.
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  UNIQUE (conversation_id, sequence)
+);
+
+-- Indexes
+CREATE INDEX idx_messages_conversation ON messages(conversation_id, sequence);
+CREATE INDEX idx_messages_created ON messages(created_at DESC);
+CREATE INDEX idx_messages_hash ON messages(content_hash);
+
+-- Trigger to update conversation.message_count
+CREATE TRIGGER messages_after_insert
+AFTER INSERT ON messages
+FOR EACH ROW
+BEGIN
+  UPDATE conversations
+  SET message_count = message_count + 1
+  WHERE id = NEW.conversation_id;
+END;
+
+CREATE TRIGGER messages_after_delete
+AFTER DELETE ON messages
+FOR EACH ROW
+BEGIN
+  UPDATE conversations
+  SET message_count = message_count - 1
+  WHERE id = OLD.conversation_id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique message identifier
+- `conversation_id`: Parent conversation (CASCADE delete)
+- `role`: Message sender (user/assistant/system)
+- `content`: SANITIZED message content (NO PII)
+- `content_hash`: For detecting duplicate messages
+- `sequence`: Order within conversation (0-indexed)
+- `created_at`: When message was created
+- `token_count`: Approximate tokens (for cost tracking)
+- `metadata`: JSON for thinking, tool calls, attachments
+
+**CRITICAL**: This table has NO `raw_content` or `unsanitized_content` column. Sanitization MUST happen before insertion.
+
+---
+
+### learnings
+
+Stores extracted learnings with full-text search.
+
+```sql
+CREATE TABLE IF NOT EXISTS learnings (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  conversation_id TEXT NOT NULL,
+  source_message_ids JSON NOT NULL, -- Array of message IDs that produced this learning
+  category TEXT NOT NULL CHECK (
+    category IN (
+      'pattern',
+      'best_practice',
+      'anti_pattern',
+      'bug_fix',
+      'optimization',
+      'tool_usage',
+      'workflow',
+      'decision'
+    )
+  ),
+  title TEXT NOT NULL, -- Short summary
+  content TEXT NOT NULL, -- Detailed learning (SANITIZED)
+  confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  tags JSON NOT NULL DEFAULT '[]', -- Array of strings
+  dedupe_hash TEXT NOT NULL UNIQUE, -- For preventing duplicates
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  metadata JSON, -- Additional context
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_learnings_conversation ON learnings(conversation_id);
+CREATE INDEX idx_learnings_category ON learnings(category, confidence DESC);
+CREATE INDEX idx_learnings_confidence ON learnings(confidence DESC);
+CREATE INDEX idx_learnings_created ON learnings(created_at DESC);
+CREATE INDEX idx_learnings_dedupe ON learnings(dedupe_hash);
+
+-- Full-text search (FTS5)
+CREATE VIRTUAL TABLE learnings_fts USING fts5(
+  learning_id UNINDEXED,
+  title,
+  content,
+  tags,
+  content='learnings',
+  content_rowid='rowid'
+);
+
+-- Triggers to keep FTS in sync
+CREATE TRIGGER learnings_fts_insert
+AFTER INSERT ON learnings
+BEGIN
+  INSERT INTO learnings_fts(rowid, learning_id, title, content, tags)
+  VALUES (NEW.rowid, NEW.id, NEW.title, NEW.content, NEW.tags);
+END;
+
+CREATE TRIGGER learnings_fts_delete
+AFTER DELETE ON learnings
+BEGIN
+  DELETE FROM learnings_fts WHERE rowid = OLD.rowid;
+END;
+
+CREATE TRIGGER learnings_fts_update
+AFTER UPDATE ON learnings
+BEGIN
+  DELETE FROM learnings_fts WHERE rowid = OLD.rowid;
+  INSERT INTO learnings_fts(rowid, learning_id, title, content, tags)
+  VALUES (NEW.rowid, NEW.id, NEW.title, NEW.content, NEW.tags);
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique learning identifier
+- `conversation_id`: Source conversation
+- `source_message_ids`: JSON array of message IDs
+- `category`: Type of learning (CHECK constraint enforced)
+- `title`: Short summary (used in lists)
+- `content`: Detailed learning text
+- `confidence`: Quality score 0.0-1.0
+- `tags`: JSON array of topic tags
+- `dedupe_hash`: Prevents duplicate learnings
+- `created_at`: When learning was extracted
+- `metadata`: Additional context
+
+**FTS5 Full-Text Search**:
+- Searches across `title`, `content`, and `tags`
+- BM25 ranking
+- Supports phrase queries, AND/OR, NEAR
+
+---
+
+### job_queue
+
+Persistent queue for async job processing.
+
+```sql
+CREATE TABLE IF NOT EXISTS job_queue (
+  id TEXT PRIMARY KEY, -- ULID (sortable)
+  type TEXT NOT NULL, -- 'sanitize', 'extract_learning', 'upload'
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (
+    status IN ('queued', 'running', 'succeeded', 'failed', 'quarantined')
+  ),
+  priority INTEGER NOT NULL DEFAULT 5 CHECK (priority >= 1 AND priority <= 10), -- 1=highest
+  run_at TEXT NOT NULL DEFAULT (datetime('now')), -- When to run (for delayed jobs)
+  locked_at TEXT, -- When job was claimed by worker
+  locked_by TEXT, -- Worker ID that claimed job
+  payload JSON NOT NULL, -- Job-specific data
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_retries INTEGER NOT NULL DEFAULT 3,
+  last_error TEXT, -- Error message from last failure
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  completed_at TEXT -- When job finished (success or quarantine)
+);
+
+-- Indexes for worker queries
+CREATE INDEX idx_job_queue_dequeue ON job_queue(status, priority, run_at)
+  WHERE status = 'queued';
+CREATE INDEX idx_job_queue_type ON job_queue(type, status);
+CREATE INDEX idx_job_queue_created ON job_queue(created_at DESC);
+
+-- Trigger for updated_at
+CREATE TRIGGER job_queue_updated_at
+AFTER UPDATE ON job_queue
+FOR EACH ROW
+BEGIN
+  UPDATE job_queue SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: ULID for time-sortable IDs
+- `type`: Job type for worker routing
+- `status`: Current state (queued/running/succeeded/failed/quarantined)
+- `priority`: 1-10, where 1 is highest priority
+- `run_at`: Delayed job support (run after this time)
+- `locked_at`: Optimistic locking timestamp
+- `locked_by`: Worker identifier (hostname + PID)
+- `payload`: JSON with job-specific parameters
+- `attempts`: Retry counter
+- `max_retries`: Max attempts before quarantine
+- `last_error`: Last failure reason
+- `completed_at`: When job finished
+
+**Worker Query Pattern** (Optimistic Locking):
+```sql
+UPDATE job_queue
+SET
+  status = 'running',
+  locked_at = datetime('now'),
+  locked_by = :worker_id,
+  attempts = attempts + 1
+WHERE id = (
+  SELECT id
+  FROM job_queue
+  WHERE status = 'queued'
+    AND run_at <= datetime('now')
+  ORDER BY priority ASC, run_at ASC
+  LIMIT 1
+)
+RETURNING *;
+```
+
+---
+
+### uploads
+
+Tracks uploads to global network (IPFS + blockchain).
+
+```sql
+CREATE TABLE IF NOT EXISTS uploads (
+  id TEXT PRIMARY KEY, -- ULID or UUID
+  learning_id TEXT NOT NULL UNIQUE,
+  ipfs_cid TEXT UNIQUE, -- Content Identifier from IPFS
+  chain_tx_hash TEXT UNIQUE, -- Blockchain transaction hash
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (
+    status IN ('pending', 'ipfs_uploaded', 'tx_submitted', 'confirmed', 'failed')
+  ),
+  retries INTEGER NOT NULL DEFAULT 0,
+  max_retries INTEGER NOT NULL DEFAULT 5,
+  last_error TEXT, -- Error from last attempt
+  tokens_earned REAL, -- Reward amount (if confirmed)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  uploaded_at TEXT, -- When IPFS upload succeeded
+  confirmed_at TEXT, -- When blockchain tx confirmed
+
+  FOREIGN KEY (learning_id) REFERENCES learnings(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_uploads_learning ON uploads(learning_id);
+CREATE INDEX idx_uploads_status ON uploads(status);
+CREATE INDEX idx_uploads_created ON uploads(created_at DESC);
+CREATE UNIQUE INDEX idx_uploads_ipfs_cid ON uploads(ipfs_cid) WHERE ipfs_cid IS NOT NULL;
+CREATE UNIQUE INDEX idx_uploads_tx_hash ON uploads(chain_tx_hash) WHERE chain_tx_hash IS NOT NULL;
+
+-- Trigger for updated_at
+CREATE TRIGGER uploads_updated_at
+AFTER UPDATE ON uploads
+FOR EACH ROW
+BEGIN
+  UPDATE uploads SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+**Column Descriptions**:
+- `id`: Unique upload identifier
+- `learning_id`: Source learning (UNIQUE - one upload per learning)
+- `ipfs_cid`: Content identifier from IPFS
+- `chain_tx_hash`: Blockchain transaction hash
+- `status`: Upload lifecycle state
+- `retries`: Attempt counter
+- `max_retries`: Max attempts before giving up
+- `last_error`: Last failure reason
+- `tokens_earned`: Reward if confirmed
+- `uploaded_at`: IPFS upload timestamp
+- `confirmed_at`: Blockchain confirmation timestamp
+
+**Upload States**:
+1. `pending` → Initial state
+2. `ipfs_uploaded` → Content in IPFS, have CID
+3. `tx_submitted` → Blockchain tx sent
+4. `confirmed` → Tx confirmed, tokens earned
+5. `failed` → Max retries exceeded
+
+---
+
+### sanitization_log
+
+Audit trail of all PII detections and redactions.
+
+```sql
+CREATE TABLE IF NOT EXISTS sanitization_log (
+  id TEXT PRIMARY KEY, -- ULID for time ordering
+  conversation_id TEXT NOT NULL,
+  message_id TEXT, -- NULL if conversation-level sanitization
+  category TEXT NOT NULL, -- PII type (api_key, email, file_path, etc.)
+  rule_id TEXT, -- Which rule detected it (for rule-based)
+  original_snippet_hash TEXT NOT NULL, -- SHA-256 of original text
+  replacement TEXT NOT NULL, -- What it was replaced with
+  detector TEXT NOT NULL CHECK (detector IN ('rule', 'ai', 'hybrid')),
+  confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), -- ISO 8601
+  metadata JSON, -- Additional context
+
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+-- Indexes
+CREATE INDEX idx_sanitization_log_conversation ON sanitization_log(conversation_id);
+CREATE INDEX idx_sanitization_log_message ON sanitization_log(message_id);
+CREATE INDEX idx_sanitization_log_category ON sanitization_log(category);
+CREATE INDEX idx_sanitization_log_created ON sanitization_log(created_at DESC);
+```
+
+**Column Descriptions**:
+- `id`: ULID for time-ordered audit trail
+- `conversation_id`: Parent conversation
+- `message_id`: Specific message (NULL for conversation-wide)
+- `category`: Type of PII detected
+- `rule_id`: Identifier of detection rule
+- `original_snippet_hash`: Hash of PII (NEVER store actual PII)
+- `replacement`: Replacement text used
+- `detector`: Which system detected it
+- `confidence`: Detection confidence score
+- `created_at`: When detection occurred
+- `metadata`: Additional context (position, surrounding text hash)
+
+**CRITICAL**: NEVER store actual PII in this table. Use `original_snippet_hash` only.
+
+---
+
+## Migrations
+
+### Migration System
+
+```typescript
+// src/database/migrations/runner.ts
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
+
+interface Migration {
+  version: number;
+  name: string;
+  up: string;
+  down: string;
+}
+
+// Migrations table
+function createMigrationsTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+// Get current version
+function getCurrentVersion(db: Database.Database): number {
+  const row = db.prepare('SELECT MAX(version) as version FROM _migrations').get() as { version: number | null };
+  return row.version ?? 0;
+}
+
+// Load migration files
+function loadMigrations(dir: string): Migration[] {
+  const files = fs.readdirSync(dir).sort();
+  const migrations: Migration[] = [];
+
+  for (const file of files) {
+    if (!file.endsWith('.sql')) continue;
+
+    const match = file.match(/^(\d+)_(.+)\.sql$/);
+    if (!match) continue;
+
+    const version = parseInt(match[1], 10);
+    const name = match[2];
+    const content = fs.readFileSync(path.join(dir, file), 'utf8');
+
+    // Split on -- UP / -- DOWN markers
+    const [up, down] = content.split(/--\s*DOWN/i);
+    const upSql = up.replace(/--\s*UP/i, '').trim();
+    const downSql = down?.trim() || '';
+
+    migrations.push({ version, name, up: upSql, down: downSql });
+  }
+
+  return migrations;
+}
+
+// Run migrations
+export function runMigrations(db: Database.Database, targetVersion?: number): void {
+  createMigrationsTable(db);
+
+  const currentVersion = getCurrentVersion(db);
+  const migrations = loadMigrations(path.join(__dirname, 'sql'));
+
+  const toApply = migrations.filter(m =>
+    m.version > currentVersion && (!targetVersion || m.version <= targetVersion)
+  );
+
+  if (toApply.length === 0) {
+    console.log('No migrations to apply');
+    return;
+  }
+
+  for (const migration of toApply) {
+    console.log(`Applying migration ${migration.version}: ${migration.name}`);
+
+    const applyMigration = db.transaction(() => {
+      db.exec(migration.up);
+      db.prepare('INSERT INTO _migrations (version, name) VALUES (?, ?)').run(migration.version, migration.name);
+    });
+
+    applyMigration();
+  }
+
+  console.log(`Migrated to version ${toApply[toApply.length - 1].version}`);
+}
+
+// Rollback migrations
+export function rollbackMigrations(db: Database.Database, targetVersion: number): void {
+  const currentVersion = getCurrentVersion(db);
+  const migrations = loadMigrations(path.join(__dirname, 'sql'));
+
+  const toRollback = migrations
+    .filter(m => m.version > targetVersion && m.version <= currentVersion)
+    .reverse();
+
+  if (toRollback.length === 0) {
+    console.log('No migrations to rollback');
+    return;
+  }
+
+  for (const migration of toRollback) {
+    console.log(`Rolling back migration ${migration.version}: ${migration.name}`);
+
+    const rollback = db.transaction(() => {
+      db.exec(migration.down);
+      db.prepare('DELETE FROM _migrations WHERE version = ?').run(migration.version);
+    });
+
+    rollback();
+  }
+
+  console.log(`Rolled back to version ${targetVersion}`);
+}
+```
+
+### Example Migration File
+
+```sql
+-- migrations/001_initial.sql
+
+-- UP
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  correlation_id TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  sanitized BOOLEAN NOT NULL DEFAULT 1 CHECK (sanitized = 1),
+  sanitization_version TEXT NOT NULL,
+  message_count INTEGER NOT NULL DEFAULT 0,
+  metadata JSON
+);
+
+CREATE INDEX idx_conversations_session ON conversations(session_id);
+CREATE INDEX idx_conversations_created ON conversations(created_at DESC);
+
+CREATE TRIGGER conversations_updated_at
+AFTER UPDATE ON conversations
+FOR EACH ROW
+BEGIN
+  UPDATE conversations SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
+-- DOWN
+DROP TRIGGER IF EXISTS conversations_updated_at;
+DROP INDEX IF EXISTS idx_conversations_created;
+DROP INDEX IF EXISTS idx_conversations_session;
+DROP TABLE IF EXISTS conversations;
+```
+
+---
+
+## Query Patterns
+
+### Repository Base Class
+
+```typescript
+// src/database/repositories/base-repository.ts
+import Database from 'better-sqlite3';
+
+export abstract class BaseRepository<T> {
+  constructor(protected db: Database.Database) {}
+
+  protected transaction<R>(fn: () => R): R {
+    const trans = this.db.transaction(fn);
+    return trans();
+  }
+
+  protected prepare(sql: string): Database.Statement {
+    return this.db.prepare(sql);
+  }
+
+  abstract create(data: Partial<T>): T;
+  abstract findById(id: string): T | null;
+  abstract update(id: string, data: Partial<T>): T;
+  abstract delete(id: string): void;
+}
+```
+
+### Conversation Repository
+
+```typescript
+// src/database/repositories/conversation-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+
+export interface Conversation {
+  id: string;
+  session_id: string;
+  correlation_id: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  sanitized: boolean;
+  sanitization_version: string;
+  message_count: number;
+  metadata: any;
+}
+
+export class ConversationRepository extends BaseRepository<Conversation> {
+  create(data: Partial<Conversation>): Conversation {
+    const id = data.id || ulid();
+    const correlation_id = data.correlation_id || ulid();
+    const sanitization_version = data.sanitization_version || '1.0.0';
+
+    this.prepare(`
+      INSERT INTO conversations (id, session_id, correlation_id, sanitization_version, metadata)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.session_id,
+      correlation_id,
+      sanitization_version,
+      JSON.stringify(data.metadata || {})
+    );
+
+    return this.findById(id)!;
+  }
+
+  findById(id: string): Conversation | null {
+    const row = this.prepare('SELECT * FROM conversations WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  findByCorrelationId(correlationId: string): Conversation | null {
+    const row = this.prepare('SELECT * FROM conversations WHERE correlation_id = ?').get(correlationId);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  findBySession(sessionId: string, limit = 10): Conversation[] {
+    const rows = this.prepare(`
+      SELECT * FROM conversations
+      WHERE session_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(sessionId, limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  update(id: string, data: Partial<Conversation>): Conversation {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (data.completed_at !== undefined) {
+      updates.push('completed_at = ?');
+      values.push(data.completed_at);
+    }
+    if (data.metadata !== undefined) {
+      updates.push('metadata = ?');
+      values.push(JSON.stringify(data.metadata));
+    }
+
+    if (updates.length === 0) {
+      return this.findById(id)!;
+    }
+
+    values.push(id);
+
+    this.prepare(`
+      UPDATE conversations
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `).run(...values);
+
+    return this.findById(id)!;
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM conversations WHERE id = ?').run(id);
+  }
+
+  private deserialize(row: any): Conversation {
+    return {
+      ...row,
+      sanitized: Boolean(row.sanitized),
+      metadata: row.metadata ? JSON.parse(row.metadata) : {}
+    };
+  }
+}
+```
+
+### Learning Repository with FTS
+
+```typescript
+// src/database/repositories/learning-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+import crypto from 'crypto';
+
+export interface Learning {
+  id: string;
+  conversation_id: string;
+  source_message_ids: string[];
+  category: string;
+  title: string;
+  content: string;
+  confidence: number;
+  tags: string[];
+  dedupe_hash: string;
+  created_at: string;
+  metadata: any;
+}
+
+export class LearningRepository extends BaseRepository<Learning> {
+  create(data: Partial<Learning>): Learning {
+    const id = data.id || ulid();
+    const dedupe_hash = this.generateDedupeHash(data.content!, data.category!);
+
+    this.prepare(`
+      INSERT INTO learnings (
+        id, conversation_id, source_message_ids, category, title,
+        content, confidence, tags, dedupe_hash, metadata
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.conversation_id,
+      JSON.stringify(data.source_message_ids || []),
+      data.category,
+      data.title,
+      data.content,
+      data.confidence,
+      JSON.stringify(data.tags || []),
+      dedupe_hash,
+      JSON.stringify(data.metadata || {})
+    );
+
+    return this.findById(id)!;
+  }
+
+  findById(id: string): Learning | null {
+    const row = this.prepare('SELECT * FROM learnings WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  search(query: string, options: {
+    category?: string;
+    minConfidence?: number;
+    limit?: number;
+  } = {}): Learning[] {
+    const limit = options.limit || 10;
+    const minConfidence = options.minConfidence || 0.0;
+
+    let sql = `
+      SELECT l.*
+      FROM learnings l
+      JOIN learnings_fts fts ON l.rowid = fts.rowid
+      WHERE fts MATCH ?
+        AND l.confidence >= ?
+    `;
+
+    const params: any[] = [query, minConfidence];
+
+    if (options.category) {
+      sql += ' AND l.category = ?';
+      params.push(options.category);
+    }
+
+    sql += ' ORDER BY bm25(fts), l.confidence DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = this.prepare(sql).all(...params);
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findByCategory(category: string, limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      WHERE category = ?
+      ORDER BY confidence DESC, created_at DESC
+      LIMIT ?
+    `).all(category, limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findRecent(limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  findTopRated(limit = 10): Learning[] {
+    const rows = this.prepare(`
+      SELECT * FROM learnings
+      ORDER BY confidence DESC, created_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    return rows.map(r => this.deserialize(r as any));
+  }
+
+  update(id: string, data: Partial<Learning>): Learning {
+    // Learnings are generally immutable, but allow confidence updates
+    if (data.confidence !== undefined) {
+      this.prepare('UPDATE learnings SET confidence = ? WHERE id = ?').run(data.confidence, id);
+    }
+    return this.findById(id)!;
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM learnings WHERE id = ?').run(id);
+  }
+
+  private generateDedupeHash(content: string, category: string): string {
+    return crypto.createHash('sha256').update(`${category}:${content}`).digest('hex');
+  }
+
+  private deserialize(row: any): Learning {
+    return {
+      ...row,
+      source_message_ids: JSON.parse(row.source_message_ids),
+      tags: JSON.parse(row.tags),
+      metadata: row.metadata ? JSON.parse(row.metadata) : {}
+    };
+  }
+}
+```
+
+### Job Queue Repository
+
+```typescript
+// src/database/repositories/job-queue-repository.ts
+import { BaseRepository } from './base-repository';
+import { ulid } from 'ulid';
+import os from 'os';
+
+export interface Job {
+  id: string;
+  type: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'quarantined';
+  priority: number;
+  run_at: string;
+  locked_at: string | null;
+  locked_by: string | null;
+  payload: any;
+  attempts: number;
+  max_retries: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export class JobQueueRepository extends BaseRepository<Job> {
+  private workerId = `${os.hostname()}-${process.pid}`;
+
+  create(data: Partial<Job>): Job {
+    const id = data.id || ulid();
+    const priority = data.priority || 5;
+    const max_retries = data.max_retries || 3;
+    const run_at = data.run_at || new Date().toISOString();
+
+    this.prepare(`
+      INSERT INTO job_queue (id, type, priority, run_at, payload, max_retries)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.type,
+      priority,
+      run_at,
+      JSON.stringify(data.payload || {}),
+      max_retries
+    );
+
+    return this.findById(id)!;
+  }
+
+  // Optimistic locking: claim next job
+  dequeue(): Job | null {
+    const updated = this.prepare(`
+      UPDATE job_queue
+      SET
+        status = 'running',
+        locked_at = datetime('now'),
+        locked_by = ?,
+        attempts = attempts + 1
+      WHERE id = (
+        SELECT id
+        FROM job_queue
+        WHERE status = 'queued'
+          AND run_at <= datetime('now')
+        ORDER BY priority ASC, run_at ASC
+        LIMIT 1
+      )
+      RETURNING *
+    `).get(this.workerId);
+
+    return updated ? this.deserialize(updated as any) : null;
+  }
+
+  markSucceeded(id: string): void {
+    this.prepare(`
+      UPDATE job_queue
+      SET status = 'succeeded', completed_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+  }
+
+  markFailed(id: string, error: string): void {
+    const job = this.findById(id);
+    if (!job) return;
+
+    if (job.attempts >= job.max_retries) {
+      // Quarantine
+      this.prepare(`
+        UPDATE job_queue
+        SET status = 'quarantined', last_error = ?, completed_at = datetime('now')
+        WHERE id = ?
+      `).run(error, id);
+    } else {
+      // Requeue with backoff
+      const backoffMs = Math.pow(2, job.attempts) * 1000;
+      const runAt = new Date(Date.now() + backoffMs).toISOString();
+
+      this.prepare(`
+        UPDATE job_queue
+        SET status = 'queued', last_error = ?, run_at = ?, locked_at = NULL, locked_by = NULL
+        WHERE id = ?
+      `).run(error, runAt, id);
+    }
+  }
+
+  findById(id: string): Job | null {
+    const row = this.prepare('SELECT * FROM job_queue WHERE id = ?').get(id);
+    return row ? this.deserialize(row as any) : null;
+  }
+
+  // Clean up stale locks (workers that crashed)
+  releaseStaleJobs(timeout_ms = 300000): number {
+    const staleTime = new Date(Date.now() - timeout_ms).toISOString();
+
+    const result = this.prepare(`
+      UPDATE job_queue
+      SET status = 'queued', locked_at = NULL, locked_by = NULL
+      WHERE status = 'running'
+        AND locked_at < ?
+    `).run(staleTime);
+
+    return result.changes;
+  }
+
+  update(id: string, data: Partial<Job>): Job {
+    throw new Error('Use specific methods (markSucceeded, markFailed)');
+  }
+
+  delete(id: string): void {
+    this.prepare('DELETE FROM job_queue WHERE id = ?').run(id);
+  }
+
+  private deserialize(row: any): Job {
+    return {
+      ...row,
+      payload: JSON.parse(row.payload)
+    };
+  }
+}
+```
+
+---
+
+## Performance Optimization
+
+### Query Performance Tips
+
+1. **Always use indexes for foreign keys**
+2. **Add covering indexes for frequent queries**
+3. **Use EXPLAIN QUERY PLAN to verify index usage**
+4. **Keep transactions short**
+5. **Use prepared statements (auto-cached)**
+
+### EXPLAIN Example
+
+```sql
+EXPLAIN QUERY PLAN
+SELECT l.*
+FROM learnings l
+JOIN learnings_fts fts ON l.rowid = fts.rowid
+WHERE fts MATCH 'typescript testing'
+  AND l.category = 'pattern'
+ORDER BY bm25(fts), l.confidence DESC
+LIMIT 10;
+
+-- Should use:
+-- - FTS index for MATCH
+-- - idx_learnings_category for category filter
+```
+
+### Maintenance
+
+```typescript
+// Run periodically
+export function optimizeDatabase(db: Database.Database): void {
+  // Rebuild FTS index
+  db.exec('INSERT INTO learnings_fts(learnings_fts) VALUES("rebuild")');
+
+  // Update statistics
+  db.exec('ANALYZE');
+
+  // Vacuum (compact database)
+  db.exec('VACUUM');
+}
+```
+
+---
+
+## Backup & Restore
+
+### Backup
+
+```typescript
+import Database from 'better-sqlite3';
+
+export async function backupDatabase(sourceDb: Database.Database, destPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const backup = sourceDb.backup(destPath);
+
+    const doBackup = () => {
+      const remaining = backup.step(100); // Pages per step
+      if (remaining === 0) {
+        backup.close();
+        resolve();
+      } else {
+        setImmediate(doBackup);
+      }
+    };
+
+    try {
+      doBackup();
+    } catch (error) {
+      backup.close();
+      reject(error);
+    }
+  });
+}
+```
+
+### Restore
+
+```typescript
+export async function restoreDatabase(sourceDb: Database.Database, destPath: string): Promise<void> {
+  const destDb = new Database(destPath);
+
+  try {
+    await backupDatabase(sourceDb, destPath);
+    console.log(`Restored to ${destPath}`);
+  } finally {
+    destDb.close();
+  }
+}
+```
+
+### Verification
+
+```typescript
+export function verifyDatabase(db: Database.Database): boolean {
+  const result = db.pragma('integrity_check', { simple: true });
+  return result === 'ok';
+}
+```
+
+---
+
+## Related Documents
+
+### Architecture
+- [Global Context Network](../architecture/architecture-global-context-network-2025-01-16.md)
+- [Database Schema Architecture](../architecture/architecture-database-schema-2025-01-16.md)
+
+### Reference
+- [Testing Strategy](./reference-testing-strategy-2025-01-16.md)
+- [Subagent Types](./reference-subagent-types-2025-01-16.md)
+
+### Guides
+- [Database Setup Guide](../guides/guide-database-setup-2025-01-16.md)
+</file>
+
+<file path="docs/STANDARDS.md">
+# Global Context Network - Project Standards
+
+> **CRITICAL**: All documentation and code MUST follow these standards to ensure consistency across the entire system.
+
+---
+**Date**: 2025-01-16
+**Status**: CANONICAL - These are the single source of truth for all project standards
+**Authority**: Established from review feedback (GPT-5, Gemini 2.5 Pro) to resolve contradictions
+
+---
+
+## 1. Privacy & Data Flow Standard (MOST CRITICAL)
+
+### Rule: NEVER Persist Raw Data
+
+**Canonical Privacy Flow**:
+```
+User Input → Hook Receives Event (in-memory)
+           → Fast Pre-Sanitization (<50ms, rule-based)
+           → Persist ONLY Sanitized Content to Database
+           → Optional AI Validation (async, downstream)
+```
+
+**What This Means**:
+- ✅ **DO**: Pre-sanitize synchronously in hook using fast regex rules
+- ✅ **DO**: Only write sanitized content to disk (messages table)
+- ✅ **DO**: Use in-memory buffers if needed (exempt from persistence)
+- ❌ **NEVER**: Persist raw content to SQLite (not even temporarily)
+- ❌ **NEVER**: Write raw content to event_queue, events table, or any disk storage
+- ❌ **NEVER**: Log raw content before sanitization
+
+**Why**: Zero-trust PII handling. If raw data never touches disk, we can guarantee no PII leaks.
+
+---
+
+## 2. Schema Standard (CANONICAL)
+
+### Official Tables
+
+**Production Tables**:
+1. `conversations` - Conversation metadata
+2. `messages` - Individual messages (SANITIZED content only)
+3. `learnings` - Extracted insights
+4. `job_queue` - Async job processing
+5. `uploads` - Network upload status
+6. `sanitization_log` - Audit trail
+
+**Eliminated Tables**:
+- ❌ NO `events` table
+- ❌ NO `event_queue` table
+- **Rationale**: These implied raw content persistence. We write sanitized directly to `messages`.
+
+### Data Flow
+
+```
+Hook (sanitize) → messages table (sanitized content)
+                → job_queue (jobs for AI validation, learning extraction, upload)
+```
+
+---
+
+## 3. Status Enum Standard (CANONICAL)
+
+All async operations use this vocabulary:
+
+```typescript
+type JobStatus =
+  | 'queued'        // Initial state
+  | 'in_progress'   // Worker claimed
+  | 'completed'     // Succeeded
+  | 'failed'        // Failed but retriable
+  | 'dead_letter';  // Failed permanently
+```
+
+**Usage**:
+- `job_queue.status`: Uses this enum
+- Upload status: Uses this enum
+- Worker states: Uses this enum
+
+**Eliminated Alternatives**:
+- ❌ NO "pending/processing" (use queued/in_progress)
+- ❌ NO "running/succeeded" (use in_progress/completed)
+- ❌ NO "quarantined" (use dead_letter)
+
+---
+
+## 4. ID Strategy Standard (CANONICAL)
+
+### Use ULID Globally
+
+```typescript
+import { ulid } from 'ulid';
+
+// All IDs use ULID
+const conversationId = ulid(); // Lexicographically sortable, chronological
+const messageId = ulid();
+const learningId = ulid();
+```
+
+**Why ULID over UUID**:
+- Chronologically sortable
+- Lexicographic ordering matches creation time
+- No need for separate timestamps in indexes
+- Better database index performance
+
+**Eliminated**: UUID v4 (not sortable)
+
+---
+
+## 5. Hook Configuration Standard (CANONICAL)
+
+### Config File Path
+```
+.claude/hooks.json
+```
+**NOT**: `.claude/hooks/hooks.json` (eliminated)
+
+### Hook IO Method
+```typescript
+// Hooks receive events via stdin (JSON)
+const event = JSON.parse(await readStdin());
+```
+**NOT**: `process.argv` (eliminated)
+
+### Hook Format
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js",
+    "Stop": ".claude/hooks/dist/stop.js"
+  }
+}
+```
+
+**CRITICAL**:
+- ✅ Point to compiled `.js` files (in `dist/` or `build/`)
+- ❌ NEVER use ts-node at runtime (too slow for <100ms budget)
+- ✅ Build step: `tsc` compiles TypeScript to JavaScript
+- ✅ Hooks run compiled JS only
+
+---
+
+## 6. Chain-of-Thought Standard (CANONICAL)
+
+### Rule: NEVER Capture Chain-of-Thought
+
+**What We Capture**:
+- ✅ User prompts
+- ✅ Assistant responses (visible output)
+- ✅ Tool calls and results
+- ✅ File operations
+- ✅ Error messages
+
+**What We NEVER Capture**:
+- ❌ Hidden chain-of-thought (internal reasoning)
+- ❌ "Thinking" blocks (if present)
+- ❌ Internal model reasoning traces
+
+**Why**:
+1. Provider policy compliance
+2. Privacy concerns
+3. No reliable access anyway (Claude Code doesn't expose it)
+
+**Action**: Remove all references to "thinking processes" or "reasoning capture" from docs.
+
+---
+
+## 7. Timestamp Standard (CANONICAL)
+
+### Use ISO-8601 Strings
+
+```typescript
+// All timestamps in database
+created_at: '2025-01-16T12:00:00.000Z'  // ISO-8601 UTC string
+
+// Generated via:
+new Date().toISOString()
+```
+
+**Why**:
+- Human-readable
+- Standard format
+- Timezone-aware (always UTC with Z)
+- SQLite text column compatible
+
+**Eliminated**: Unix epoch milliseconds (not human-readable)
+
+---
+
+## 8. Import Standards
+
+### Performance Timing
+```typescript
+import { performance } from 'node:perf_hooks';
+
+const start = performance.now();
+// ... work ...
+const duration = performance.now() - start;
+```
+**NOT**: `performance.now()` without import (will error)
+
+### Database
+```typescript
+import Database from 'better-sqlite3';
+
+const db = new Database('context.db');
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
+```
+
+### IDs
+```typescript
+import { ulid } from 'ulid';
+
+const id = ulid();
+```
+
+---
+
+## 9. Sanitization Standard
+
+### Fast Pre-Sanitization (In Hook)
+
+**Budget**: <50ms (synchronous, rule-based)
+
+**What to Redact**:
+1. API keys (OpenAI, Anthropic, AWS, Google, GitHub, etc.)
+2. Absolute file paths with usernames
+3. Email addresses
+4. IP addresses
+5. Phone numbers
+6. URLs with tokens/secrets
+7. JWT tokens
+8. Environment variable values
+9. SSH keys, PEM blocks
+10. Credit card numbers, SSNs
+
+**Redaction Format**:
+```typescript
+"[REDACTED_API_KEY]"
+"[REDACTED_EMAIL]"
+"[REDACTED_PATH]"
+"[REDACTED_IP]"
+```
+
+**Pseudonymization** (optional, session-scoped):
+```typescript
+"<EMAIL_1>", "<EMAIL_2>"  // Same email = same placeholder within session
+"<PATH_1>", "<PATH_2>"    // Same path = same placeholder
+```
+
+### AI Validation (Async, Downstream)
+
+**Budget**: <2s per conversation (async job)
+
+**Purpose**:
+- Catch context-aware PII (names that look like variables)
+- Validate pre-sanitization caught everything
+- Handle edge cases
+
+**Not a replacement**: AI runs AFTER pre-sanitization, not instead of.
+
+---
+
+## 10. File Path Standards
+
+### Hook Scripts
+```
+.claude/hooks/
+  src/
+    userPromptSubmit.ts
+    stop.ts
+  dist/              # Compiled output
+    userPromptSubmit.js
+    stop.js
+  tsconfig.json
+  package.json
+```
+
+### Project Structure
+```
+docs/
+  architecture/
+  decisions/
+  plans/
+  guides/
+  reference/
+  learnings/
+  reviews/
+src/
+  hooks/
+  sanitization/
+  learning/
+  mcp/
+  database/
+tests/
+  unit/
+  integration/
+  e2e/
+```
+
+---
+
+## 11. Testing Standards
+
+### Coverage Requirements
+- **Global**: ≥85% line coverage
+- **Critical paths** (sanitization, hooks): ≥95% line + branch coverage
+- **Learnings extraction**: ≥80%
+
+### Test Types
+- **70% Unit tests**: Isolated, fast, mocked
+- **20% Integration tests**: Component interactions
+- **10% E2E tests**: Full workflows
+
+### Naming
+```typescript
+describe('sanitizeContent', () => {
+  it('should redact API keys', () => {
+    // arrange
+    const input = 'key: sk-1234567890';
+
+    // act
+    const result = sanitizeContent(input);
+
+    // assert
+    expect(result).toBe('key: [REDACTED_API_KEY]');
+  });
+});
+```
+
+---
+
+## 12. Performance Budgets
+
+| Component | Budget | Measurement |
+|-----------|--------|-------------|
+| Hook execution | <100ms p95 | End-to-end (receive → sanitize → persist) |
+| Fast sanitization | <50ms p95 | Regex-based rules only |
+| Database writes | <20ms p95 | WAL-mode insert |
+| Database queries | <100ms p95 | Indexed lookups |
+| MCP queries | <200ms p95 | Search + serialization |
+| AI sanitization | <2s p95 | Claude API call |
+| Learning extraction | <5s p95 | Claude API call |
+
+---
+
+## 13. Error Handling Standards
+
+### Hooks
+```typescript
+try {
+  // Hook work
+} catch (error) {
+  // NEVER throw or block user
+  logger.error('Hook failed', { error, event });
+  // Fail silently
+}
+```
+
+### Workers
+```typescript
+// Retry with exponential backoff
+const maxAttempts = 3;
+for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  try {
+    await processJob(job);
+    break;
+  } catch (error) {
+    if (attempt === maxAttempts) {
+      await moveToDeadLetter(job, error);
+    } else {
+      await sleep(2 ** attempt * 1000);
+    }
+  }
+}
+```
+
+---
+
+## 14. Logging Standards
+
+### Structured Logging
+```typescript
+logger.info('Event captured', {
+  conversation_id: conversationId,
+  message_id: messageId,
+  role: 'user',
+  content_length: sanitizedContent.length,  // NEVER log raw content
+  duration_ms: duration
+});
+```
+
+### Privacy in Logs
+- ❌ NEVER log raw content
+- ❌ NEVER log PII before sanitization
+- ✅ Log sanitized content (optional, for debugging)
+- ✅ Log metadata (IDs, lengths, durations)
+
+---
+
+## 15. Blockchain Standard (Clarified)
+
+### EVM Chain Selection (Not Celestia)
+
+**For MVP**:
+- Target: Ethereum L2 (Base, Arbitrum, Optimism, or Polygon)
+- **NOT Celestia**: Celestia is data availability layer, not EVM-compatible
+
+**Celestia Usage** (optional, future):
+- Can use for data availability (content commitments)
+- Requires separate integration
+
+**Clarification**:
+- Smart contracts = EVM chain
+- Data availability = Celestia
+- Don't conflate the two
+
+---
+
+## 16. Consent & Licensing Standard
+
+### Default Behavior
+- **Default**: Local-only mode (no uploads)
+- **Opt-in required**: User must explicitly enable global sharing
+- **Manual approval gate**: Each upload requires confirmation (MVP)
+
+### License for Learnings
+- **Recommended**: CC BY 4.0 or ODC-By for shared learnings
+- **Prohibited**: Sharing raw conversations (only derived learnings)
+
+**ADR Required**: ADR-007 must formalize this
+
+---
+
+## 17. Documentation Standards
+
+### File Naming
+```
+category-topic-YYYY-MM-DD.md
+
+Examples:
+- architecture-sanitization-pipeline-2025-01-16.md
+- decision-use-ulid-2025-01-16.md
+- guide-hook-development-2025-01-16.md
+```
+
+### Frontmatter (Required)
+```yaml
+---
+title: Document Title
+category: architecture|decision|plan|guide|reference|learning
+date: 2025-01-16
+status: active|draft|archived
+authors: Name(s)
+tags: [tag1, tag2]
+---
+```
+
+### Cross-Linking
+- Always link to related docs in "Related Documents" section
+- Use relative paths: `../architecture/file.md`
+- Update category INDEX.md when adding files
+
+---
+
+## 18. Code Standards
+
+### TypeScript Strict Mode
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true
+  }
+}
+```
+
+### No `any` Types
+```typescript
+// ❌ BAD
+function process(data: any) { }
+
+// ✅ GOOD
+function process(data: unknown) {
+  if (typeof data === 'string') {
+    // Type guard
+  }
+}
+
+// ✅ BETTER
+interface EventData {
+  role: string;
+  content: string;
+}
+function process(data: EventData) { }
+```
+
+---
+
+## Enforcement
+
+### All New Documents MUST:
+1. Reference this STANDARDS.md file
+2. Use canonical schema (messages + job_queue)
+3. Use canonical status enums (queued → in_progress → completed → failed → dead_letter)
+4. Use ULID for all IDs
+5. Follow privacy flow (pre-sanitize, never persist raw)
+6. Exclude chain-of-thought universally
+7. Use .claude/hooks.json path
+8. Use compiled .js hooks
+9. Use ISO-8601 timestamps
+10. Follow performance budgets
+
+### Review Checklist
+
+Before any document is finalized:
+- [ ] Uses canonical schema (no events/event_queue tables)
+- [ ] Uses canonical status enums
+- [ ] Uses ULID for IDs
+- [ ] Pre-sanitizes in hook (never persists raw)
+- [ ] Excludes chain-of-thought
+- [ ] Uses .claude/hooks.json config path
+- [ ] References compiled .js hooks (not ts-node)
+- [ ] Uses ISO-8601 timestamps
+- [ ] Performance budgets specified
+- [ ] Privacy guarantees maintained
+
+---
+
+## Related Documents
+
+- [ADR-004: Sanitize Before Storage](./decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [Database Schema Reference](./reference/reference-database-schema-2025-01-16.md)
+- [Architecture: Hooks & Event Capture](./architecture/architecture-hooks-event-capture-2025-01-16.md)
+
+---
+
+*This document is the canonical source of truth for all project standards. When in doubt, refer here. If standards conflict with other docs, THIS document wins.*
+</file>
+
+</files>

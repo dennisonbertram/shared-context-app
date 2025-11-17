@@ -1,0 +1,37 @@
+MCP Server Architecture Document Complete
+
+DELIVERABLE: /Users/dennisonbertram/Develop/apps/shared-context-app/.conductor/sacramento/docs/architecture/architecture-mcp-server-2025-01-16.md
+
+DOCUMENT SUMMARY:
+- Complete MCP server architecture for Global Context Network
+- Full alignment with STANDARDS.md (canonical schema, ULID, status enums, performance budgets)
+- MCP SDK-compliant tool and resource schemas
+- Three core tools: search_learnings, get_learning_by_id, get_learning_context
+- Three resources: context://learnings/recent, context://learnings/top-rated, context://stats
+- Performance optimization with SQLite FTS5 full-text search
+- <200ms p95 query latency budget with implementation details
+- Security model: local-only binding (127.0.0.1), read-only database, rate limiting
+- Complete TypeScript implementation examples
+- Comprehensive testing strategy (unit, integration, performance)
+- Claude Code auto-discovery integration via .claude/mcp.json
+- Deployment and monitoring guidance
+
+KEY FEATURES:
+1. MCP SDK Compliance: Precise JSON schemas per @modelcontextprotocol/sdk
+2. Query Optimization: FTS5 indexes, BM25 ranking, EXPLAIN QUERY PLAN validation
+3. Performance Plan: <200ms search, <50ms get_by_id, <200ms get_context
+4. Security: Local-only, read-only DB, input validation, rate limiting
+5. Implementable: Complete code examples with no ambiguity
+
+REVIEW STATUS:
+- GPT-5 review in progress (background process 92bb7d)
+- Review context generated: mcp-server-review-context.txt (29,751 tokens)
+- Review output will be in: gpt5-mcp-server-review.txt
+
+NEXT STEPS:
+1. Wait for GPT-5 review to complete
+2. Address any critical issues identified
+3. Validate MCP SDK compliance with actual SDK
+4. Implement server.ts following the architecture
+5. Add comprehensive tests
+6. Validate performance targets with real database

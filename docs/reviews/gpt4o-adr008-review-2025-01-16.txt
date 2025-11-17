@@ -1,0 +1,31 @@
+## ADR-008: Global Sharing Architecture Review
+
+### Overall Assessment
+**Needs Revision**
+
+The ADR provides a comprehensive plan for integrating a global sharing mechanism using IPFS and an EVM L2 blockchain. However, there are some critical areas and technical details that require attention before proceeding with implementation.
+
+### Critical Issues (Must Fix)
+1. **GDPR Right-to-Delete Compliance**: The revocation list approach must clearly document technical and legal validation. Ensure the approach is robust and comprehensively described, potentially using legal consultation.
+2. **Clarification on IPFS Data**: Reinforce that only derived learnings are uploaded to IPFS and blockchain. Ensure no accidental upload of any sensitive or PII data.
+3. **Finalized Consent and Licensing Procedures**: Before uploads, ensure a solid ADR for consent/licensing is in place, aligned with user opt-in requirements.
+
+### Technical Corrections Needed
+1. **Clarification on Celestia vs EVM**: The document describes Celestia as a future addition, but ensure there's a clear separation between its role (as a DA layer) and the EVM chain (for smart contracts). Ensure this distinction is understood from a technical and infrastructure perspective.
+2. **Solidity Contract Completeness**: The provided Solidity contract is minimal for tracking uploads. Consider adding example tests for key functionality, such as upload validation and metadata hash checks, to ensure completeness.
+
+### Recommendations for Improvement
+1. **Expand Alternatives Analysis**: The evaluation of alternatives such as Arweave and Filecoin can be more detailed. Clarify the potential usability post-MVP, specifically in terms of costs and integration complexity.
+2. **Add Consent Workflow**: Create a detailed consent workflow aligned with the standards for user opt-in before data uploads.
+3. **Enhance Revocation Description**: Explain how the revocation list works with the blockchain's immutability. Consider adding more technical details and examples of handling revocations.
+
+### What's Done Well
+- **Decentralization Vision**: The architecture aligns well with the project's decentralization goal, leveraging established technologies like IPFS and EVM blockchains effectively.
+- **Privacy Preservation**: The ADR is clear on uploading only derived learnings, maintaining strong privacy principles by default.
+- **Risk Identification**: Major risks like gas price spikes, pinning service failure, and privacy violations are correctly identified with solid mitigations planned.
+
+### Additional Considerations
+- **Alignment with Standards**: Check consistency in section references (e.g., STANDARDS.md Section 15) to avoid any ambiguity.
+- **Post-MVP Planning**: Consider specifying clearer plans and transitional steps for moving from MVP to fully decentralized token reward systems, involving community validators and governance.
+
+In summary, while the ADR is well-defined in many respects, it requires some corrections and additional details on compliance and alternative strategies before advancing to implementation. Address these critical issues to ensure robust technical foundations and legal alignments for the Global Sharing Architecture.

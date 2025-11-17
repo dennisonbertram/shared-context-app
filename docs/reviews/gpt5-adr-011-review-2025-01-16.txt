@@ -1,0 +1,233 @@
+Below is a focused technical review of ADR-011 against the requested areas. I’ve split feedback into “What’s solid” and “Needs improvement,” then provided concrete, actionable fixes and a quick checklist to close gaps.
+
+Overall verdict: Strong direction and threat model, but there are several critical correctness issues in the signing/verification flow, keychain usage, and on-chain identity linkage that must be fixed before shipping an MVP.
+
+1) Cryptographic approach (Ed25519, signing, verification)
+
+What’s solid
+- Ed25519 with @noble/ed25519 is a good choice for speed, security, and simplicity.
+- RFC 8785 canonical JSON is the right way to avoid signature malleability from JSON ordering.
+- Separation of contentHash and metadataHash plus a compact signing payload is a clean design.
+
+Needs improvement (critical)
+- Metadata hash circularity and non-canonical hashing:
+  - You compute metadataHash with JSON.stringify({ provenance, attestations }) before adding integrityChecks, but verify recomputes metadataHash using the entire signed.attestations (which now includes integrityChecks that itself includes metadataHash). That’s a circular dependency and will not match.
+  - Use the same canonicalization function (RFC 8785) for metadataHash that you use for the signing payload, not JSON.stringify.
+- Timestamp mismatch in signing payload:
+  - signLearning builds provenance.timestamp, then independently uses new Date().toISOString() in signingPayload. verify uses signed.provenance.timestamp. These can differ and invalidate signatures.
+  - Use a single timestamp value created once (e.g., provenance.timestamp) everywhere.
+- Encoding mismatch and determinism:
+  - @noble/ed25519 requires Uint8Array input, but the pseudocode passes strings to sign/verify. Always sign the UTF-8 bytes of the canonical JSON string.
+  - You currently sign the raw payload but also store signature.signedData = sha256(signingPayload). Either sign the hash (hash-then-sign) or the canonical bytes, but be consistent. For Ed25519, signing canonical bytes directly is fine; if you keep signedData, make it informational only.
+- Domain separation and versioning:
+  - Add a domain separation tag and version in the signing payload (e.g., context: "gcn.signedlearning.v1").
+  - Include schemaVersion and hashAlgorithm fields. This prevents cross-protocol replay and supports migration.
+- Determinism test is incorrect:
+  - Your property test expects identical signatures for multiple calls with same content, but you include a timestamp in the payload. That will vary. Either:
+    - Exclude time from the signed payload and rely on on-chain block time, or
+    - Keep time in the payload but fix the test to compare signatures for a single constructed payload with fixed timestamp.
+
+Actionable fix (sign/verify)
+- Define a canonical “metadata body” that explicitly excludes integrityChecks:
+  - metadataBody = { provenance, attestations: omit(attestations, ['integrityChecks']) }
+  - metadataHash = sha256(canonicalJSON(metadataBody))
+- Define payload = { context: "gcn.signedlearning.v1", learningId, contentHash, metadataHash, timestamp: provenance.timestamp, schemaVersion: "1" }
+- Sign UTF-8 bytes of canonicalJSON(payload) using @noble/ed25519.
+- Verify by recomputing contentHash and metadataHash (with canonical JSON, excluding integrityChecks), reconstruct payload from stored fields, then ed25519.verify(signature, bytes(canonicalJSON(payload)), publicKey).
+- Ensure signature.signatureValue and signature.publicKey are consistently encoded (prefer base64url to avoid hex vs base64 confusion).
+- Add signature.kid as a stable, derivable key ID (e.g., keyId = "ed25519:" + base64url(sha256(publicKey))).
+
+2) Key management security (OS keychain integration)
+
+What’s solid
+- OS-native key storage choice is appropriate (Keychain, DPAPI, Secret Service).
+- Explicit fallback to password-encrypted file with warnings is thoughtful.
+
+Needs improvement (critical)
+- macOS example leaks the private key on the command line:
+  - security add-generic-password -w "secret" puts the secret in process args, viewable by other users via ps and logged in shell history.
+  - Use a library (e.g., keytar) or native Keychain APIs that do not expose secrets via CLI args. Alternatively, write the secret to Keychain via an API binding, not shell.
+- File permission hardening:
+  - Windows: ensure file permissions restrict read to current user (and consider using LocalMachine vs CurrentUser deliberately). DPAPI “CurrentUser” scope is fine, but ensure the directory is created with restrictive permissions.
+  - Linux: if falling back to file, enforce chmod 0600 and store in a per-user config dir. If using keytar/libsecret, ensure per-user collection.
+- Fallback encryption:
+  - Use a memory-hard KDF (Argon2id) with per-key salt and a high-entropy parameter set. Then encrypt with an authenticated cipher (XChaCha20-Poly1305 or AES-256-GCM).
+  - Store salt, kdf params, and AEAD nonce alongside cipher text.
+- Rotation and key identifiers:
+  - Include a keyId (kid) and a rotation procedure. Keep old public keys available for verification.
+- Export/import:
+  - Enforce encryption on export using Argon2id and AEAD. Never allow plaintext export. Warn about side-channel risks.
+
+Nice-to-have
+- Hardware-backed keys (future):
+  - Secure Enclave doesn’t support Ed25519; if you later move to P-256 for platform keys, you could get non-extractable keys on macOS. For now, Keychain-stored data blobs are fine.
+
+3) Attestation completeness (sanitization, extraction evidence)
+
+What’s solid
+- Capturing rule and model versions, counts, confidence, and audit status is a good start.
+- Recording extraction model, prompt version, temperature, and review status is helpful.
+
+Needs improvement
+- Provenance robustness and reproducibility:
+  - Include precise tool provenance: git commit SHA of sanitizer/extractor code, package-lock/pnpm-lock hash, container image digest (if containerized), Node/runtime versions. This enables downstream reproducibility and supply-chain attestation (SLSA/in-toto later).
+- Sanitization evidence anchoring:
+  - Instead of just counts and confidence, add a non-sensitive “redaction summary” (counts by category) and a Merkle root over the sanitization log entries for this conversation. Store the merkle root in the attestation (not the raw entries).
+- Privacy minimization:
+  - Publishing sourceConversationId and deviceId can create linkability risks. Consider:
+    - Make sourceConversationId local-only and omit from published artifact.
+    - Replace deviceId with a stable publisherId tied to the key (publicKey fingerprint) or explicitly mark deviceId optional/pseudonymous.
+- Consent/license alignment with STANDARDS:
+  - Include explicit license and consent attestations (e.g., license: "CC-BY-4.0", consent: "explicit") in the signed payload. This is a requirement area per the STANDARDS’ consent section.
+
+4) Blockchain integration design
+
+What’s solid
+- Storing hashes and IPFS CID on-chain is appropriate; block time provides a trustworthy timestamp.
+- Emitting events for indexing is standard.
+
+Needs improvement (critical)
+- Ed25519 vs EVM keys mismatch:
+  - EVM transactions must be signed by a secp256k1 key; “deriveEthAddress from Ed25519” is not viable for authorization (you would not have a secp256k1 private key to control that address).
+  - Pick one:
+    - Option A (simplest for Web3): Use one secp256k1 key for both content signing (EIP-712/keccak) and tx signing. Drop Ed25519.
+    - Option B (hybrid): Keep Ed25519 for content signatures, and use a separate EVM key for publishing. On-chain, store the Ed25519 pubkey and publisher EVM address. Don’t attempt to verify Ed25519 on-chain (expensive, no precompile). Off-chain validators verify the Ed25519 signature; the contract simply records the mapping and hashes.
+  - If you choose Option B, add an off-chain verifiable binding: store keyId and publicKey in the contract; when publishing, clients check the IPFS object signature off-chain and that the on-chain record matches the content and metadata hashes from IPFS.
+- Types and gas:
+  - Use bytes32 for contentHash and metadataHash (SHA-256 is 32 bytes, fits).
+  - Use bytes for Ed25519 publicKey (32 bytes), not string.
+  - Consider storing CID as bytes (multihash/multicodec-encoded) instead of string for gas efficiency; or keep as string for readability if gas isn’t a concern on L2.
+- Learning ID:
+  - ULID is 128 bits. In Solidity, either store as bytes16 or string. If you keep bytes32, define a fixed encoding (left-pad or place ULID bytes at a defined offset) and document it.
+- Replay/sequence:
+  - If you want freshness guarantees beyond block time, add a per-publisher sequential nonce or monotonic sequence number in the contract. This helps consumers detect out-of-order or replayed publications from the same publisher.
+
+5) Alternatives analysis quality
+
+What’s solid
+- Good breadth of options and rationale, including PKI, Sigstore, blockchain-native keys, multisig, HSMs.
+
+Needs improvement
+- Consider DSSE and COSE:
+  - DSSE (Dead Simple Signing Envelope) or COSE_Sign1 would reduce custom envelope risks. Calling this out strengthens the analysis and gives a standards-based migration path.
+- DID/VC:
+  - Mention DIDs + Verifiable Credentials as an optional identity-binding mechanism, especially for org publishers, without requiring OIDC/KYC.
+
+6) Risks and mitigations coverage
+
+What’s solid
+- Key loss/compromise, replay, algorithm agility, attestation falsification, chain reorgs are well covered.
+
+Needs improvement
+- Additional risks to add:
+  - CLI secret exposure (macOS security -w and process args leakage).
+  - Metadata/linkability: deviceId and sourceConversationId can deanonymize publishers.
+  - Supply-chain compromise: sanitizer/extractor code tampered pre-release. Mitigate via signed releases and provenance (SLSA/in-toto) and include build digests in attestations.
+  - Canonicalization drift: ensure RFC 8785 implementation consistency across languages/platforms; add conformance tests.
+  - IPFS pinning/liveness: pinning strategy and redundancy to avoid content becoming unavailable; consider multiple pinning providers and a retention policy.
+
+7) Implementation plan feasibility
+
+What’s solid
+- Phased plan is reasonable with clear acceptance criteria and budgets.
+- Unit, integration, property, and perf tests are laid out clearly.
+
+Needs improvement
+- Add:
+  - Schema/versioning work items (schemaVersion, hashAlgorithm, kid, domain tag).
+  - Deterministic metadataHash across languages (cross-implementation test vectors).
+  - A gcn-verify CLI to verify a CID or JSON file offline (this will dogfood the design and catch canonicalization/encoding issues).
+  - Explicit decision and implementation for the EVM identity issue (Option A vs B above).
+  - License/consent fields in SignedLearning and verify they’re non-empty when uploading.
+  - ULID encoding decision for on-chain storage.
+
+8) Any missing security considerations
+
+- Include a “verification policy” recommendation for consumers:
+  - Always verify signature and hashes.
+  - Optionally require on-chain registration for acceptance (and check block confirmations).
+  - Enforce model/tool version minimums if desired (e.g., reject content under vulnerable sanitizer versions).
+- Algorithm agility:
+  - Add fields: signature.algorithm = "ed25519", hash.algorithm = "sha256", canonicalization = "rfc8785". Plan migration guides.
+- Privacy by design:
+  - Default to omit sourceConversationId and deviceId from the published artifact. If included, ensure they’re pseudonymous and documented as privacy-sensitive.
+
+Concrete corrections and snippets
+
+Signing/verification (pseudocode shape)
+- Build provenance once with a single ISO-8601 timestamp.
+- Build attestationsWithoutIntegrity (do not include integrityChecks).
+- metadataBody = { provenance, attestations: attestationsWithoutIntegrity }
+- contentHash = sha256(UTF8(learning.content))
+- metadataHash = sha256(UTF8(canonicalJSON(metadataBody)))
+- payload = {
+    context: "gcn.signedlearning.v1",
+    schemaVersion: "1",
+    hashAlgorithm: "sha256",
+    canonicalization: "rfc8785",
+    learningId: learning.id,
+    contentHash,
+    metadataHash,
+    timestamp: provenance.timestamp,
+    kid: keyIdFromPublicKey(publicKey)
+  }
+- signatureValue = ed25519.sign(UTF8(canonicalJSON(payload)), privateKey)
+- signed.attestations.integrityChecks = { contentHash, metadataHash }
+- Verify by recomputing the same values using canonicalJSON and excluding integrityChecks.
+
+Key storage (macOS)
+- Replace execSync calls with a library (e.g., keytar) that invokes native APIs without exposing secrets to argv.
+- For fallback file storage, encrypt with Argon2id + XChaCha20-Poly1305 and chmod 0600.
+
+Smart contract changes
+- struct LearningRecord {
+    bytes32 contentHash;
+    bytes32 metadataHash;
+    address publisher;
+    bytes ipfsCid;      // or string
+    uint256 timestamp;  // block.timestamp
+    bytes publicKey;    // 32 bytes for Ed25519 pubkey
+    bytes32 keyId;      // sha256(pubkey)
+  }
+- Accept bytes for ipfsCid and publicKey. Emit both hashes in events. Consider storing schemaVersion and hashAlgorithm as small uint8 fields if you want on-chain independence.
+
+Standards alignment
+
+- IDs: You use ULID. If stored on-chain, define encoding (bytes16 or string). Don’t silently cast to bytes32 without documenting padding/placement.
+- Timestamps: You’re using ISO-8601 strings off-chain (good). On-chain timestamp is block.timestamp (authoritative).
+- Consent/licensing: Add license and consent fields to SignedLearning to match STANDARDS “Consent & Licensing Standard.”
+
+What’s done well
+
+- Clear articulation of the trust problem and real-world threat scenarios.
+- Sensible choice of Ed25519 and canonicalization, with performance budgets.
+- Good testing strategy scaffold and attention to property-based testing.
+- Phased implementation is pragmatic and allows iterative hardening.
+- On-chain anchoring of both content and metadata hashes helps detect any tampering beyond content-only.
+
+Actionable checklist to reach a secure MVP
+
+- Fix signing/verification:
+  - Use canonical JSON for metadata hashing, exclude integrityChecks from metadataBody.
+  - Use one timestamp (provenance.timestamp) in both signing and verification.
+  - Sign UTF-8 bytes of canonicalJSON(payload) with domain separation; add schemaVersion, hashAlgorithm, canonicalization, and kid.
+  - Normalize encoding to base64url for publicKey and signature; document it.
+- Key management:
+  - Replace macOS CLI example with keytar/native API; remove -w usage.
+  - Implement Argon2id + AEAD for fallback file with strict permissions.
+  - Add keyId derivation, rotation plan, and export/import with encryption.
+- Attestations:
+  - Add toolchain provenance (commit SHA, lockfile hash, container digest).
+  - Add Merkle root of sanitization log entries; keep raw logs local.
+  - Add license and consent fields to SignedLearning.
+  - Consider omitting sourceConversationId and deviceId from the published object, or make them optional and clearly pseudonymous.
+- Blockchain:
+  - Decide identity strategy (secp256k1-only vs hybrid). If hybrid, accept that Ed25519 verification is off-chain.
+  - Use bytes for publicKey and ipfsCid. Define ULID encoding on-chain.
+  - Add a per-publisher nonce (optional) and confirmations policy in docs.
+- Tests and tooling:
+  - Add cross-language canonicalization test vectors.
+  - Add gcn-verify CLI for offline verification of a CID/file.
+  - Update property tests (determinism) to match the final signed payload semantics.
+
+If you address the critical issues above (metadata hash circularity, canonicalization, timestamp consistency, keychain CLI leakage, and EVM identity mismatch), this ADR provides a solid foundation for a trustworthy global learnings network consistent with your STANDARDS.

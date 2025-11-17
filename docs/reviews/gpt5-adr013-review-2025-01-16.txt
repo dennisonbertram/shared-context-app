@@ -1,0 +1,120 @@
+GPT-5 Review of ADR-013: Observability, Cost Management, and SLO Governance
+Date: 2025-01-16
+Reviewer: GPT-5 (via llm CLI)
+
+Executive summary
+- Directionally strong and aligned with privacy-first/local-first. The ADR establishes local-only telemetry by default, explicit opt-in for any sharing, and clear guardrails against logging raw content or chain-of-thought.
+- However, several critical gaps exist: correlation/context propagation is inconsistent, SLO enforcement is not actually measuring SLOs (it only warns on single-call latency), cost controls don't prevent overruns under concurrency and don't estimate pre-call cost, and some logging/metrics schema mismatches plus missing retention/encryption policies could undermine privacy and resilience.
+- With a few targeted changes—context propagation via AsyncLocalStorage, allowlist-based event schemas, atomic budget reservations with pre-call estimation, percentiles over sliding windows, and clarified degradation behavior—the approach will be technically sound and feasible.
+
+1) Privacy-safe observability: strengths and issues
+Strengths
+- Local-only telemetry by default; explicit opt-in for any sharing; aggregate-only if/when sharing is enabled.
+- Clear "never log raw content" rule and prohibition on chain-of-thought logging.
+- Structured logs, correlation IDs, and a basic sanitization step in the logger.
+- Stated canary tests to detect PII in logs.
+
+Gaps and recommendations
+- Logger/schema mismatch and blocklist risk:
+  - LogEntry interface shows fields (component, event, correlation_id, duration_ms), but the PrivacyLogger example writes message and omits several fields. Align the log schema and enforce it with a strict TypeScript type plus runtime validation.
+  - Replace the current blocklist ("email, phone, ip, path") with a strict allowlist per event type. Define allowed keys and types per event; reject or redact everything else. A blocklist will miss PII in differently named fields.
+- Sanitized content logging:
+  - If "sanitized content" logging is enabled under opt-in, apply an irreversible redaction policy and record a "sanitization_version" to audit the transform used. Consider additional sampling or short retention (e.g., 24–72h) for any content-bearing logs.
+- Correlation context propagation:
+  - trackPerformance generates a new correlation ID per call; that contradicts "generate at hook entry and propagate." Use AsyncLocalStorage (Node) to attach correlation_id once at ingress and automatically include it across logs/metrics. Permit nested spans with parent_span_id if you want traces later.
+- Retention and encryption:
+  - You note a retention policy for metrics, but not for logs. Add a 30-day retention for logs by default, configurable. Implement compaction/vacuuming.
+  - Encrypt SQLite at rest (e.g., SQLCipher) or enforce OS-level encryption and strict file permissions (0600). Record this as a requirement for any machine with multiple users.
+- Cardinality and growth:
+  - Avoid storing correlation_id in high-cardinality time-series metrics by default; keep it only in logs and trace tables. Metrics should be low-cardinality with tags from constrained allowlists.
+- Operational privacy footguns:
+  - Disable third-party library debug logs that could include headers/URLs. Wrap HTTP client with a redaction interceptor to ensure keys/URLs never reach logs.
+  - Ensure CLI subcommands never print any content fields, even sanitized, unless an explicit debug flag is set.
+
+2) Cost management: practicality and sufficiency
+Strengths
+- Clear budget types (daily/monthly/per-operation) and explicit graceful degradation paths.
+- Token-based cost calculation model aligned with Anthropic-style pricing.
+- Plan to notify at warning thresholds and reset on defined cadences.
+
+Gaps and recommendations
+- Pre-call cost estimation and enforcement:
+  - The code checks per_operation_limit_usd but does not compare it to an estimated per-call cost. Before the call, estimate tokens (based on prompt/template sizes) and abort if the estimate exceeds the per_operation_limit or would breach daily/monthly limits. Consider trimming prompts or switching to a cheaper model when near budget limits.
+- Concurrency and atomicity:
+  - Multiple workers can overspend in parallel. Use a budgets table in SQLite with atomic "spend reservations" in a transaction (BEGIN IMMEDIATE) to prevent race conditions. Reserve estimated spend pre-call; reconcile post-call with actual usage; handle overage by subtracting/crediting the delta on the next operation.
+- Persisted accounting schema:
+  - Add a concrete schema for ApiCallMetrics and budgets:
+    - api_call_metrics(id, timestamp, operation, model, input_tokens, output_tokens, cost_usd_cents INT, correlation_id, status)
+    - budgets(id, period, daily_limit_cents, monthly_limit_cents, per_operation_limit_cents, current_daily_spend_cents, current_monthly_spend_cents, period_start)
+  - Use integer cents to avoid floating-point drift.
+- Pricing variability and updates:
+  - Pricing varies by model, features (tools, cache), and can change. Store model-specific pricing in config with a version and last-updated timestamp; support hot reload or periodic refresh. Include cache-related token fields (e.g., cache creation/reads) if you use prompt caching later.
+- Idempotency and retries:
+  - Use Anthropic idempotency keys (correlation_id-derived) to avoid double billing on retries. Only record cost on successful responses; reconcile on any non-idempotent retries.
+- Vendor rate limits and backoff:
+  - Include per-model QPS and concurrency caps with jittered exponential backoff to avoid throttling penalties. Rate limiting should also be part of cost control.
+- Degradation and privacy:
+  - When AI sanitization is paused, rules-only mode may increase privacy risk. Consider: for learnings destined for the decentralized network, hold and require manual approval or postpone upload when AI validation is off. Optionally, run a high-confidence ruleset and only allow uploads that pass a strict static policy (whitelist patterns) until budget resets.
+- Budget reset robustness:
+  - Persist last reset timestamps; on startup, recompute whether a reset should have occurred. Handle clock skew. Provide a "dry run" cost projection for the day in the CLI.
+
+3) SLO enforcement feasibility
+Strengths
+- Sensible component SLOs with p95 goals and alert thresholds.
+- Instrumentation wrapper using perf_hooks is viable and low overhead.
+
+Gaps and recommendations
+- Single-call checks vs true SLOs:
+  - The code only logs warn on duration > threshold; it does not compute percentiles nor "N consecutive events." Implement a sliding window per operation (e.g., last 1k samples or last 1h) and compute p50/p95/p99 periodically. Maintain counters for consecutive threshold breaches for alerting. Store windowed aggregates to avoid scanning the entire table.
+- Percentiles in SQLite:
+  - SQLite lacks built-in percentiles. Options:
+    - Maintain per-operation HDR histograms in memory and flush periodic summaries (bins) to SQLite.
+    - Or store raw durations and compute percentiles in-process via order statistics for the latest window. For CLI reports, you can do windowed queries and compute p95 in Node.
+- Clarify measurement points:
+  - "WAL insert operation <20ms" is not directly measurable from the app layer. Measure the duration of "begin transaction to commit a single insert," or "insert call latency," which is under your control. Adjust the SLO names accordingly.
+- Realism of targets:
+  - p95 <20ms for writes and <100ms for queries may be tight on Windows, on slow disks, or under antivirus. If this system must run on diverse local machines, consider setting environment-kind baselines (dev laptop vs server) or broaden p95 targets with a p99 cap to account for I/O spikes.
+- Context propagation:
+  - Use AsyncLocalStorage to attach correlation_id and "operation" context so every log/metric event gets consistent IDs without passing them through all signatures.
+- Automated responses to SLO breach:
+  - Tie breach detection to adaptive throttling (reduce concurrency), load shedding (queue longer), or model fallback to restore SLO. Alerting alone is not enforcement.
+
+4) Missing elements or potential issues
+- Schema alignment and typing:
+  - Align LogEntry and the PrivacyLogger implementation. Include component, event, correlation_id, level, and a validated metadata shape per event. Provide a JSON schema per event type and validate at runtime using a lightweight validator.
+- Storage resilience:
+  - Specify SQLite pragmas (WAL mode, synchronous=NORMAL) and batching (e.g., flush logs every 100ms) to meet the "<5ms per hook" impact claim. Provide a ring buffer fallback if disk is temporarily unavailable, plus backpressure when the DB is locked or disk is full.
+- Retention for logs and costs:
+  - Add explicit retention and compaction for logs and api_call_metrics (e.g., 30 days default) with job scheduling.
+- Security and permissions:
+  - Ensure files are created with restricted permissions. Document where metrics.db and logs are stored (OS-specific app data dir). Provide an option to move data to an encrypted volume.
+- Operational runbook:
+  - Reviews requested it. Add concrete runbook steps: rotate/compact databases, reset budgets, inspect stuck queues, enable debug logging safely, recover from corrupt SQLite, backup/restore, migrate schemas.
+- CLI safety:
+  - By default, redact content fields from CLI output. Require a --include-content flag for any sanitized content, with an additional confirmation in interactive sessions.
+- Model choice and fallback:
+  - Consider a cheaper model for learning extraction when approaching budget limits and reserve the expensive model for high-value items.
+- Queue growth controls:
+  - When learning jobs are paused due to budget, implement caps and aging: drop or re-evaluate jobs older than N days; provide user-facing backlog indicators and resume controls.
+- Testing and verification:
+  - Add tests for: budget race conditions across multiple workers, idempotent retries, percentile computations, retention jobs, and PII canaries (inject emails/keys/paths/URLs in synthetic data and assert absence downstream).
+- External billing API caveat:
+  - Anthropic may not expose a reliable real-time billing API. Treat external reconciliation as periodic manual import if needed, but don't rely on it for enforcement.
+
+Concrete, prioritized fixes
+1) Unify log schema and implement allowlist-based event schemas with runtime validation; add 30-day log retention and file permission controls.
+2) Add AsyncLocalStorage for correlation/context propagation and stop generating new correlation IDs inside trackPerformance; support nested spans with parent IDs.
+3) Implement sliding-window percentile tracking per operation and a lightweight in-memory histogram; persist periodic aggregates for CLI reports.
+4) Replace float USD with integer cents; add budgets and api_call_metrics tables; implement atomic pre-call spend reservation + post-call reconciliation in SQLite transactions.
+5) Add pre-call cost estimation, model-aware pricing, idempotency keys on API calls, and concurrency/rate limits with retries/backoff.
+6) Clarify AI-off behavior: hold uploads to the decentralized network unless content passes a stricter static policy or gets manual approval.
+7) Adjust SLO names/measurement points to app-observable units (e.g., "insert duration" rather than "WAL insert"), and consider platform-aware targets.
+8) Add encryption-at-rest guidance (SQLCipher or OS encryption), plus explicit on-disk locations and backup/restore steps in the runbook.
+9) Add queue growth controls and user notifications with threshold levels (80/90/100%), and CLI guardrails against printing content by default.
+10) Document performance pragmas and batch sizes to meet the <5ms per hook budget; add benchmarks in CI to prevent regressions.
+
+Overall assessment
+- Alignment with privacy-first/local-first: strong, with the caveats around allowlists, encryption, and retention that should be addressed before leaving draft.
+- Cost management: conceptually correct but currently insufficient for real enforcement under concurrency; add atomic reservations, pre-call estimation, idempotency, and pricing variability.
+- SLO enforcement: feasible with added sliding-window percentiles, realistic measurement points, and automated corrective actions.
+- With the above fixes, the ADR becomes technically sound, operationally practical, and faithful to the project's principles.

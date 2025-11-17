@@ -1,0 +1,137 @@
+Alignment assessment: FAIL (with concrete, fixable issues)
+
+What’s aligned
+- Data flow intent matches the canonical privacy flow: pre-sanitize in-hook, persist sanitized-only to messages, enqueue async AI validation jobs.
+- Schema choices largely match standards: messages, job_queue, sanitization_log; no events/event_queue.
+- Status enum uses the canonical set.
+- ULID is referenced for IDs; ISO-8601 timestamps are used.
+- Hook IO via stdin and .claude/hooks.json path are consistent with the standard.
+- Performance budgets are set to the canonical budgets.
+
+Blocking misalignments
+- Storing raw PII in detections: The AI validation section persists detections with a text field (e.g., “John Smith”) into messages.ai_detections and sanitization_log.detections. That persists raw PII to disk and directly violates “NEVER persist raw content.”
+- Hook packaging: Hook examples use .ts files with a shebang. Standards require compiled .js in dist/ (no ts-node at runtime).
+- performance.now usage: Hook samples call performance.now without importing from node:perf_hooks, which will throw at runtime.
+- Person names as PII: ADR-004’s taxonomy includes PERSON_NAME, but the pre-sanitization list in STANDARDS excludes names. The current flow would persist names to disk until the async AI pass runs, violating the “PII never touches disk” claim if person names are considered PII. This policy inconsistency must be resolved explicitly.
+
+Privacy guarantee assessment
+- As written, the “zero PII leakage to disk” guarantee is not met due to:
+  - Persisting AI detection text snippets to DB (raw PII in ai_detections and sanitization_log).
+  - Persisting names in messages.content until the AI validation stage completes, if names are considered PII (ADR-004). This creates a window where PII resides on disk.
+- In-memory handling of raw input is otherwise sound and consistent with the invariant.
+
+Gap analysis (what’s missing or underspecified)
+- Detection artifact scrubbing: A canonical structure for detections that never includes raw PII (store category, placeholder, span offsets against the sanitized string, and cryptographic digests or reversible pseudonyms in-memory only).
+- Job claiming semantics: Atomic dequeue/claim pattern for job_queue (status transition to in_progress with started_at and attempts++ in a single statement) to avoid double-processing.
+- Message sequencing: Atomic per-conversation sequence generation (transaction-safe strategy) without events table.
+- Non-content fields: Sanitization rules for tool_calls, attachments (file paths), and any metadata fields stored anywhere (including logs). The plan only addresses message content.
+- Consent/network control: AI validation calls a remote API; there’s no “local-only” toggle. Standards’ consent defaults (local-only mode) imply remote calls must be opt-in or at least configurable.
+- Performance safeguards: Guard expensive multi-line regex (PEM blocks) and unbounded patterns with pre-check sentinels and size limits; catastrophe backtracking risk not addressed.
+- DB enforcement: The pre_sanitized flag alone is insufficient; no DB-level guardrails to prevent unsanitized writes (even inadvertently) beyond that flag.
+- Luhn check for credit cards: Pattern lacks a Luhn validation pass, likely producing high false positives.
+- Offset robustness: AI-provided start/end positions assume byte/UTF-16 offsets against already-sanitized content; ambiguity not addressed (multi-byte, repeated substrings, normalization).
+- Error/logging hygiene: Some examples log raw AI response on invalid JSON; ensure no PII ends up in logs even indirectly. Also sanitize error.message strings.
+- Worker concurrency/backoff: Retry/backoff policy is sketched but no complete state transition table; dead-letter handling path is not fully specified with auditability.
+
+Risk assessment
+- PII leakage via detection artifacts: Storing detection.text would immediately violate the zero-PII policy.
+- PII leakage window for names: If names are PII (ADR-004), they are stored until AI validation completes; crashes or backlogs prolong exposure.
+- Regex performance/DoS: Broad, multi-line, and backtracking-prone regex (e.g., PEM block /[\s\S]+?/ with global) risks p95 spikes and hook timeouts; worst-case inputs could exceed budget.
+- AI offset drift: Replacing spans by start/end on previously mutated strings can mis-apply redactions or miss instances, especially with repeated tokens.
+- Concurrency: Without atomic job claiming and per-conversation sequence generation, race conditions can corrupt ordering or double-process.
+- Network privacy: AI validation sends content off-box; without opt-in, this may violate “local-only” default or user expectations.
+- DB enforcement gaps: A pre_sanitized flag that code can set is not a reliable control. Lack of DB-level validators leaves room for accidental unsanitized writes.
+- Logging leakage: Error/log payloads could inadvertently include raw or sensitive substrings if not consistently sanitized.
+
+Recommendations
+
+Critical fixes (must fix to pass)
+- Never persist raw PII in detections:
+  - Redefine Detection for persistence to exclude raw text entirely. Persist only:
+    - category (enum)
+    - start/end offsets relative to the sanitized content
+    - placeholder applied
+    - confidence
+    - optional salted hash of the text (e.g., HMAC-SHA256 with local volatile key) if dedup is needed; do not store reversibility or the key.
+  - Ensure sanitization_log and messages.ai_detections never include plaintext PII or raw substrings.
+- Resolve PERSON_NAME policy contradiction:
+  - Option A (privacy-strong): Expand Stage 1 to include a fast NER pass for PERSON/ORG with a strict time budget (e.g., deterministic dictionary/heuristic + optional tiny local model) or defer write until Stage 2 completes for messages containing likely names (violates hook budget).
+  - Option B (policy-clarify): Update STANDARDS to state the zero-PII guarantee applies to the enumerated fast categories; PERSON/ORG redaction is performed asynchronously and may briefly reside on disk. Make this explicit in ADR-004 and the Standards. If you choose B, revise claims like “PII never touches disk.”
+  - Choose and document one path. Today the doc claims “GUARANTEE: No PII on disk,” which is not true if names are treated as PII.
+- Hook packaging:
+  - Require compiled .js artifacts in .claude/hooks/dist and update all examples to point to .js. Remove .ts shebang examples.
+  - Import performance from node:perf_hooks in all Node code that uses it.
+- Add a network/consent gate:
+  - AI validation must be disabled by default in “local-only” mode. Add a config flag (default false) and ensure workers check it. Document that no content leaves the machine unless enabled.
+- Job queue claim semantics:
+  - Document atomic claiming: UPDATE … WHERE status='queued' ORDER BY created_at LIMIT N RETURNING …; set status=in_progress, started_at=now, attempts=attempts+1 in one statement/transaction.
+
+Important improvements
+- Sequence number strategy:
+  - Document a transaction-safe per-conversation sequence: SELECT COALESCE(MAX(sequence), 0) FROM messages WHERE conversation_id=? FOR UPDATE; INSERT with next value; wrap in a transaction. Or use a per-conversation sequence table.
+- Non-content field sanitization:
+  - Explicitly sanitize attachment paths, tool call arguments/outputs, and any path/url fields before persistence.
+- Regex safety:
+  - Pre-check sentinels (e.g., content.includes('-----BEGIN ') before running PEM regex).
+  - Cap content size earlier (you have a 1MB guard; consider 256KB for hooks) and early-abort heavy patterns after a match count threshold.
+  - Add Luhn verification for credit cards to reduce false positives.
+- DB enforcement:
+  - Add a lightweight DB trigger that aborts inserts containing obvious forbidden patterns using LIKE for “-----BEGIN ”, “sk_”, “@”, etc. SQLite regex is limited, but sentinel checks reduce risk of catastrophic mistakes.
+  - Better: centralize all DB writes in one module that always calls fastSanitize and add unit tests against that module.
+- Offset robustness:
+  - Have the AI return ranges against the sanitized string including a short context window. Validate that substring at [start,end) equals the proposed “text” before replacing; on mismatch, fallback to safe substring search with context to locate the exact match.
+- Logging hygiene:
+  - Ensure logs never include raw text fields. Even for AI-invalid JSON, avoid logging the raw response body to disk; log a checksum and size only, with optional in-memory capture for debugging.
+- Worker reliability:
+  - Document exponential backoff, max attempts, and dead-letter reporting with sanitization-safe payloads. Include idempotency keys not based on content.
+
+Nice-to-haves
+- Add canary tests (known PII strings) to full ingest path CI to prove invariants on every commit.
+- Property-based tests around regex patterns to find pathological inputs and backtracking spikes.
+- Add per-pattern micro-benchmarks and a budget per pattern (μs-scale).
+- Version pattern library and AI prompt; persist version tags in sanitization_log (without raw content).
+
+Performance budget assessment
+- Stage 1 <50ms p95: Realistic if patterns are curated and expensive multi-line regexes are guarded by sentinels. The PEM regex is costly; guard it and cap size. Precompile patterns once. Avoid sequential global passes where possible; group related patterns or use a single pass where it helps.
+- Hook total <100ms p95: Achievable on typical laptops if DB writes are optimized (WAL, prepared statements) and contention is low. Ensure synchronous fs and console I/O are minimized; no ts-node.
+- AI validation <2s p95: Reasonable for small messages. Batch validate multiple messages per conversation to control overhead and costs. Enforce a strict timeout and retries with backoff.
+- DB write <20ms p95: Achievable with WAL and small records. Measure on constrained machines and under mild concurrency.
+
+Integration clarity
+- Hook → sanitize → persist sanitized-only → enqueue job is clear.
+- Schema DDL aligns with canonical tables and enums.
+- Missing details:
+  - Atomic job claim transitions and retries.
+  - Sequence number generation.
+  - Non-content fields sanitization.
+  - Config gating for networked AI validation.
+  - Compiled JS hooks with .claude/hooks.json pointing to dist/*.js.
+
+Testing strategy adequacy
+- Strong start: unit tests for patterns, integration tests for privacy and performance, adversarial tests.
+- Additions required to prove privacy guarantees:
+  - Canary suite that drives raw PII through the hook and then asserts database-wide grep finds none (including ai_detections and sanitization_log columns).
+  - Tests asserting detections persistence never contains raw text values.
+  - Tests covering tool_calls/attachments sanitization.
+  - Tests for AI offset mismatch resolution and repeated substrings.
+  - Tests for “local-only” mode forbidding network calls.
+
+Implementation readiness score
+- Stage 1 (fast sanitization): 7/10 after addressing compiled JS, regex safety guards, non-content sanitization, and DB enforcement. Currently 5/10 due to packaging and DB enforcement gaps.
+- Stage 2 (AI validation): 6/10 once detection storage is redesigned to exclude raw text, job claim semantics are specified, and network/consent gating is added. Currently 4/10 due to the critical PII persistence bug in detections and missing job semantics.
+- Overall: 5/10 now; 7/10 with the critical fixes above.
+
+Concrete must-fix checklist to reach PASS
+- Replace any persisted detection schema that includes raw text; persist only category, offsets, placeholder, confidence, and non-reversible digests if needed.
+- Decide and document the PERSON_NAME policy. Either:
+  - Expand Stage 1 to cover names sufficiently to maintain “no PII on disk,” or
+  - Amend Standards/ADR to clarify that the zero-PII guarantee applies to enumerated categories and that names may exist until async validation completes (and change any “PII never touches disk” language accordingly).
+- Update hook examples to compiled JS in dist/, with correct imports for performance.
+- Add a config flag to disable AI validation in local-only mode; default off.
+- Document and implement atomic job claiming with retries and dead-letter flow.
+- Document and implement transaction-safe sequence number allocation per conversation.
+- Add sanitization for tool_calls and attachments before any persistence.
+- Add sentinel-guarded regex strategy, size caps, and Luhn check for credit cards.
+- Ensure logs never include raw content or PII-like substrings.
+
+If you correct the detection persistence bug, reconcile the names policy, and fix packaging/claiming details, this design will align with STANDARDS.md/ADR-004 and achieve the intended privacy guarantees.

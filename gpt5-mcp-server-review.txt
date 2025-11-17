@@ -1,0 +1,181 @@
+Overall assessment
+- Status: Needs fixes before implementation
+- The design is close, but there are several protocol, schema, and implementability gaps that will cause compile- or run-time failures, and a few standards conflicts that must be reconciled.
+
+Critical issues (must fix before implementation)
+1) MCP SDK tool discovery not implemented
+- Section: MCP Server Implementation → Server Configuration and Tools
+- Problem: You call registerToolHandlers(server, …) but do not show a tools/list handler. Clients discover tools via tools/list. Without it, tools will not appear in Claude Code.
+- Action: Add server.setRequestHandler('tools/list', …) returning the three tool definitions (search_learnings, get_learning_by_id, get_learning_context) with the exact inputSchema shown.
+
+2) Inconsistent tool response error field
+- Sections: Tools → get_learning_by_id, get_learning_context
+- Problem: You return isError, but the MCP spec uses is_error (snake_case) on tool responses. The SDK typically expects snake_case on the wire even if TypeScript types are camelCase in your code.
+- Action: Confirm the exact field name in @modelcontextprotocol/sdk 1.x. If spec-compliant form is is_error, update all responses and examples accordingly.
+
+3) Missing performance import where used
+- Sections: Tools (search_learnings, get_learning_by_id, get_learning_context), Resources (resources/read)
+- Problem: performance.now() is used but not imported in those code blocks. STANDARDS.md explicitly requires import { performance } from 'node:perf_hooks'.
+- Action: Add the import in the files that use performance (server.ts and any module using it).
+
+4) Resource handler references db that is out of scope
+- Section: Resources → registerResourceHandlers
+- Problem: registerResourceHandlers only receives (server, learningRepo, config) but uses db.prepare(...) for stats. db is undefined in this scope.
+- Action: Pass db into registerResourceHandlers or move stats queries into a repository.
+
+5) Repository API and tool contract drift
+- Section: Tools → search_learnings; Reference: Database repositories → learning-repository.ts
+- Problems:
+  - Server tool supports tags and offset; LearningRepository.search() does not (no tags AND filter, no offset).
+  - SQL shown under Performance Optimization includes offset, but repository method doesn’t.
+- Actions:
+  - Extend LearningRepository.search(query, { category?, tags?, minConfidence?, limit?, offset? }) to implement:
+    - FTS5 MATCH on title/content/tags
+    - Confidence and optional category filters
+    - AND-tags filter (your json_each approach is good) 
+    - ORDER BY bm25(fts) ASC, l.confidence DESC
+    - LIMIT/OFFSET
+
+6) Standards conflicts: status enums and ULID
+- References: docs/STANDARDS.md (canonical), docs/reference/reference-database-schema-2025-01-16.md
+- Problems:
+  - Job/Upload statuses in schema reference and architecture use 'queued', 'running', 'succeeded', 'failed', 'quarantined'. STANDARDS requires: queued, in_progress, completed, failed, dead_letter.
+  - Schema reference allows “ULID or UUID,” but STANDARDS mandates ULID globally.
+- Actions: Update all schema docs and any example SQL to use the canonical status enums and specify ULID only.
+
+7) Claude Code discovery path uncertainty
+- Section: Claude Code Discovery
+- Problem: Uses .claude/mcp.json; ensure this path is what Claude Code actually reads. The standards specify .claude/hooks.json for hooks, but not a canonical path for MCP. Some Anthropic docs use different config discovery.
+- Action: Verify with current Claude Code docs; document the correct path. If .claude/mcp.json is correct, cite the source. Otherwise, update.
+
+8) Test stubs don’t match server API
+- Section: Testing Strategy → Unit Tests (createMCPServer config)
+- Problem: Tests pass db in config to createMCPServer, but MCPServerConfig doesn’t include db; createMCPServer always opens db by dbPath. This won’t compile/work.
+- Action: Add an optional db?: Database.Database to MCPServerConfig or accept an injected db parameter for tests; when present, skip opening a new connection.
+
+Major improvements (should address soon)
+1) FTS5 tags column content and tokenizer
+- Current: tags stored as JSON in learnings, then mirrored to FTS column tags. FTS will tokenize JSON punctuation suboptimally.
+- Improvement: Store tags_text (lowercased, space-delimited) alongside JSON tags and index tags_text in FTS to improve search relevance; keep JSON tags for precise AND filtering.
+- Consider FTS5 tokenizer config: tokenize="unicode61 remove_diacritics 2 tokenchars '-_#'" to handle code-like tokens and hashtags.
+
+2) Safer FTS query validation
+- Current: validateSearchQuery blocks tokens like DROP/UNION, which can falsely flag legitimate text. For FTS MATCH, prepared statements already mitigate injection.
+- Improvement: Limit validation to maximum length and disallow only double quotes or control characters; optionally escape user phrases if not in advanced syntax. Keep everything parameterized.
+
+3) Index coverage and query hints
+- Ensure indexes exist exactly as listed and run EXPLAIN QUERY PLAN during dev:
+  - learnings(category, confidence DESC)
+  - learnings(confidence DESC)
+  - learnings(created_at DESC)
+  - messages(conversation_id, sequence)
+- Add ANALYZE post-migration and periodic optimize (INSERT INTO learnings_fts(learnings_fts) VALUES('rebuild'); ANALYZE).
+
+4) Enforce read-only at process level
+- You already set readonly: true and PRAGMA query_only=ON. Add try/catch on connect to log if PRAGMA fails; set foreign_keys=ON (standards).
+
+5) Response payload size control
+- Truncate content excerpts (you do), but also limit result counts server-side via config.maxResultsPerQuery; enforce robustly in all handlers, including resources.
+
+6) Align resource stats with “Network” naming
+- context://stats currently returns local DB stats (not global network). Consider renaming to context://learnings/stats or document clearly it’s local node stats.
+
+Minor suggestions (nice to have)
+- Add resource: context://learnings/categories to list category counts.
+- Add optional sort parameter to search_learnings: { sort: 'relevance' | 'confidence' | 'recent' }.
+- Add schema version to resources: include schema_version from migrations/_migrations.
+- Emit structured slow-query logs with SQL hash and params length only (never include raw content).
+- Consider exposing a health resource: context://health with p95, total_queries.
+
+MCP SDK compliance verification
+- Transport: StdioServerTransport used correctly.
+- Capabilities: You set capabilities.tools and capabilities.resources, good.
+- Required handlers:
+  - tools/list: MISSING. Must return the three tool definitions with name, description, inputSchema.
+  - tools/call: Implemented for all three tools; ensure consistent response shape and is_error if required by spec.
+  - resources/list: Implemented with proper fields (uri, name, description, mimeType).
+  - resources/read: Implemented and returns contents array with text and mimeType.
+- Content shape: For tool responses, using type: 'text' with a JSON string is OK. No mimeType field for tool content is standard.
+- Error flag: Verify field name is is_error not isError for SDK 1.x wire format; update accordingly.
+- Discovery: Verify .claude/mcp.json path; not an SDK requirement, but critical for Claude Code auto-discovery.
+
+Performance validation
+- Target: <200ms p95 for search and get_learning_context; <50ms p95 for get_learning_by_id.
+- Likelihood: Achievable on local, read-only SQLite with FTS5 given:
+  - WAL mode (already set), query_only ON (already set), foreign_keys ON (add it), synchronous NORMAL (for read-only it doesn’t matter much).
+  - Proper FTS index join on rowid (you do).
+  - Smaller result sets (limit default 10).
+  - JSON.stringify of 10 small records is typically <5–10ms.
+- Risks and mitigations:
+  - Tag AND filter uses json_each subquery: on large rows, ensure tags array is short and indexed; this is per-row, but executed after FTS filter reduces candidate set. Should be fine. Consider indexing tags with an auxiliary mapping table for large-scale future.
+  - Stats resource runs several COUNT/AVG queries each read; on small-medium DB it’s fine; for larger DB consider caching stats or using a materialized summary table with trigger updates.
+  - Ensure ANALYZE is run to get good index selection; add periodic optimize task.
+- Recommendation: Add benchmark with 50k learnings. Expect typical FTS match under 50–100ms with bm25 order on commodity hardware. Keep serialization under control and avoid sending full content.
+
+Schema alignment (with STANDARDS.md)
+- IDs: Use ULID only. Update “ULID or UUID” mentions in schema reference and ensure repos always generate ULID (you already do in repositories).
+- Status enums: Update job_queue.status and uploads.status to canonical: queued, in_progress, completed, failed, dead_letter. Update worker logic in repository accordingly (markSucceeded -> completed; quarantined -> dead_letter; running -> in_progress, etc.).
+- Privacy: Not directly part of MCP server, but ensure get_learning_context never includes any unsanitized content. The messages table is sanitized-only per standards, so OK.
+- Timestamps: You already use ISO-8601 strings; ensure all examples do likewise.
+
+Query optimization check
+- FTS5 definition: Good (content=learnings, content_rowid=rowid).
+- Join: JOIN learnings_fts fts ON l.rowid = fts.rowid is correct.
+- Rank: ORDER BY bm25(fts) (ascending) then confidence DESC is correct.
+- Category filter: Prefer AND l.category = ? with a separate param instead of (? IS NULL OR l.category = ?), for the simpler code path. If you keep the conditional, bind the arg twice.
+- Indexes: Define as in Query Optimization section. Add idx_messages_conversation(sequence) (you already have a composite index).
+- Tag AND filter: Your json_each approach is fine for MVP; ensure JSON1 is enabled (it is in modern SQLite and better-sqlite3).
+
+Tool design review
+- search_learnings: Good parameters. Add offset support (currently missing in LearningRepository). Add input length cap (already present in validateSearchQuery).
+- get_learning_by_id: Good; ensure p95 <50ms by selecting by primary key. Return 404 error shaped consistently with is_error if using it.
+- get_learning_context: Good. Add limit guard if conversations can be very large; or a include_messages_limit optional parameter with default 200 to cap payloads.
+
+Resources design review
+- context://learnings/recent and context://learnings/top-rated: Appropriate and useful.
+- context://stats: Useful, but clarify it’s local-node stats. Consider adding generated_at and query_time_ms (you do).
+- Return mimeType: application/json set correctly.
+
+Security review
+- Local-only binding/read-only DB: Sufficient for MVP given stdio transport. Your bindAddress check is moot for stdio; document that networking is disabled in MVP and remove bindAddress until HTTP transport exists.
+- Read-only DB: readonly: true + PRAGMA query_only=ON are good. Also add PRAGMA foreign_keys=ON for consistency with standards.
+- Input validation: Keep length limit; reconsider keyword-based blocking (see recommendation under Major improvements). Always use prepared statements (you do).
+- Rate limiting: Present but not wired. If you include it, apply in handlers. For stdio + local single-agent, not critical.
+
+Any missing pieces
+- Missing code for registerToolHandlers (tools/list and registering tool schemas).
+- Missing db import/scope in registerResourceHandlers for stats queries.
+- Missing offset and tags implementation in LearningRepository.search.
+- Missing import of performance everywhere it’s used.
+- Test harness examples need alignment (createMCPServer accepting injected db).
+- Tokenizer options for FTS5 and tags indexing strategy (optional but recommended).
+- Document the actual Claude Code MCP discovery path based on current product docs.
+
+Actionable fix checklist
+- MCP
+  - Implement tools/list returning the three tools with the shown JSON Schemas.
+  - Standardize tool error field to is_error (confirm with SDK).
+  - Ensure all handlers import performance from node:perf_hooks.
+  - Pass db into registerResourceHandlers or move stats into a repo.
+- Repository
+  - Extend LearningRepository.search to support tags AND filter and offset; align SQL with doc.
+  - Ensure all repo methods parse JSON safely and handle NULL metadata.
+- Schema/Standards
+  - Update docs and SQL to use canonical status enums and ULID-only IDs.
+  - Add foreign_keys=ON PRAGMA where missing in MCP server connection.
+- Performance
+  - Add ANALYZE post-migration; optional optimize task to rebuild FTS and ANALYZE.
+  - Optionally adjust FTS tokenizer and tags_text for improved search.
+- Tests
+  - Update createMCPServer to accept injected db for unit tests, or mock better-sqlite3.
+  - Add tests for tags AND filter and offset pagination.
+
+Feasibility of <200ms p95 with SQLite FTS5
+- Yes for MVP-scale on local machine, if:
+  - FTS5 is used as designed; result sets are limited (<= 20).
+  - JSON serialization of small payloads and computing bm25 is typical sub-100ms.
+  - EXPLAIN QUERY PLAN confirms virtual table scan over learnings_fts and not scanning learnings first.
+- Keep stats resource inexpensive or cache it if used frequently.
+
+Conclusion
+- With the above critical fixes and a couple of performance hygiene steps, this MCP server is implementable and should meet the 200ms p95 target. The biggest blockers are MCP tool discovery (tools/list), the response error flag naming, repository-tool parameter mismatches (tags/offset), and aligning to the canonical status enums/ULID from STANDARDS.md.

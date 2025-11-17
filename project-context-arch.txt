@@ -1,0 +1,1669 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+Additional Info:
+----------------
+
+================================================================
+Directory Structure
+================================================================
+architecture/
+  architecture-global-context-network-2025-01-16.md
+  architecture-subagent-system-2025-01-16.md
+  INDEX.md
+plans/
+  plan-original-user-vision-2025-01-16.md
+INDEX.md
+
+================================================================
+Files
+================================================================
+
+================
+File: architecture/architecture-global-context-network-2025-01-16.md
+================
+# Global Context Network - System Architecture
+
+> Complete system architecture for the Global Context Network MVP
+
+---
+title: Global Context Network System Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [architecture, system-design, blockchain, privacy, subagents]
+---
+
+## Overview
+
+The Global Context Network is a decentralized system for capturing, sanitizing, storing, and sharing AI agent learnings globally. It enables agents to learn from each other's experiences while maintaining strict privacy guarantees through PII sanitization before storage.
+
+### Core Innovation
+
+**"Mining through Learning"**: Instead of computational mining, users contribute valuable learnings to the network and receive token rewards based on quality and validation.
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Claude Code (User Agent)                         │
+└────────────┬─────────────────────────────────────┬──────────────────────┘
+             │                                      │
+             ▼ UserPromptSubmit                    ▼ Stop
+    ┌────────────────┐                    ┌───────────────┐
+    │  Hook Handler  │                    │  Hook Handler │
+    └────────┬───────┘                    └───────┬───────┘
+             │                                      │
+             └──────────────┬──────────────────────┘
+                            ▼
+                 ┌──────────────────────┐
+                 │  Event Collector     │
+                 │  (Captures events)   │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Event Queue        │
+                 │   (Persistent)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Sanitization Queue  │
+                 │  (Async Worker)      │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+              ┌─────────────────────────────┐
+              │   Sanitization Pipeline     │
+              │  ┌────────────────────────┐ │
+              │  │ Rule-Based Detector    │ │
+              │  │ (Regex, Fast)          │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ AI-Powered Sanitizer   │ │
+              │  │ (Context-Aware)        │ │
+              │  └──────────┬─────────────┘ │
+              │             ▼                │
+              │  ┌────────────────────────┐ │
+              │  │ Hybrid Validator       │ │
+              │  │ (Combine Results)      │ │
+              │  └──────────┬─────────────┘ │
+              └─────────────┼───────────────┘
+                            │
+                            ▼ SANITIZED DATA ONLY
+                 ┌──────────────────────┐
+                 │   SQLite Database    │
+                 │  ┌────────────────┐  │
+                 │  │ Conversations  │  │
+                 │  │ Messages       │  │
+                 │  │ Learnings      │  │
+                 │  │ Job Queue      │  │
+                 │  │ Uploads        │  │
+                 │  └────────────────┘  │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │ Learning Extractor   │
+                 │ (Async Worker)       │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │  Quality Filter      │
+                 │  (Score & Validate)  │
+                 └──────────┬───────────┘
+                            │
+                            ├──────────────────┐
+                            │                  │
+                            ▼                  ▼
+                 ┌──────────────────┐  ┌──────────────────┐
+                 │   MCP Server     │  │  Mining Queue    │
+                 │  (Query Access)  │  │  (Upload)        │
+                 └──────────────────┘  └────────┬─────────┘
+                            │                    │
+                            │                    ▼
+                            │         ┌──────────────────┐
+                            │         │  IPFS Upload     │
+                            │         └────────┬─────────┘
+                            │                  │
+                            │                  ▼
+                            │         ┌──────────────────┐
+                            │         │ Blockchain Tx    │
+                            │         │ (Token Rewards)  │
+                            │         └──────────────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │   Agent Clients      │
+                 │ (Query via MCP)      │
+                 └──────────────────────┘
+```
+
+## Core Components
+
+### 1. Event Capture Layer
+
+**Purpose**: Capture Claude Code conversations without blocking the user
+
+**Components**:
+- **UserPromptSubmit Hook**: Captures user input
+- **Stop Hook**: Captures agent responses
+- **Event Collector**: Aggregates events into conversations
+- **Event Queue**: Persists events (SQLite-based)
+
+**Key Requirements**:
+- Hook execution < 100ms
+- Never block user interaction
+- Fail silently with logging
+- Persist events across restarts
+
+### 2. Sanitization Pipeline
+
+**Purpose**: Remove ALL PII before database storage
+
+**Components**:
+- **Rule-Based Detector**: Fast regex-based PII detection
+- **AI Sanitizer**: Context-aware detection using LLM
+- **Hybrid Validator**: Combines both approaches
+- **Audit Logger**: Tracks what was redacted
+
+**PII Categories**:
+1. API Keys & Secrets
+2. File Paths (absolute with usernames)
+3. Email Addresses
+4. IP Addresses
+5. Names (person names, not variables)
+6. Phone Numbers
+7. URLs with tokens
+
+**Critical Guarantee**: NEVER store raw data. Sanitization happens BEFORE database insert.
+
+### 3. Storage Layer
+
+**Purpose**: Persist sanitized conversations and learnings
+
+**Database**: SQLite with migrations
+
+**Tables**:
+- `conversations`: Sanitized conversation metadata
+- `messages`: Individual sanitized messages
+- `learnings`: Extracted insights and patterns
+- `job_queue`: Async job tracking
+- `uploads`: Network upload status
+- `sanitization_log`: Audit trail
+
+**Design Principles**:
+- ACID compliance
+- Indexed for performance (queries < 100ms)
+- Versioned migrations
+- Transaction-based updates
+
+### 4. Async Processing Layer
+
+**Purpose**: Process jobs without blocking
+
+**Components**:
+- **Job Queue**: Persistent, priority-based queue
+- **Workers**: Independent job processors
+- **Retry Logic**: Exponential backoff
+- **Error Handling**: Quarantine failed jobs
+
+**Job Types**:
+1. `sanitize_conversation`: Run sanitization pipeline
+2. `extract_learning`: Generate learnings
+3. `mine_upload`: Upload to network
+
+### 5. Learning Extraction Layer
+
+**Purpose**: Extract valuable, reusable learnings
+
+**Components**:
+- **Conversation Analyzer**: Determines if conversation has value
+- **Category Extractors**: Specialized by learning type
+- **Quality Scorer**: Assigns confidence scores
+- **Deduplication**: Prevents duplicate learnings
+
+**Learning Categories**:
+- `pattern`: Code patterns and architectures
+- `best_practice`: Recommended approaches
+- `anti_pattern`: Things to avoid
+- `bug_fix`: Problem-solving strategies
+- `optimization`: Performance improvements
+- `tool_usage`: How to use tools/libraries
+- `workflow`: Development workflows
+- `decision`: Architecture decisions
+
+**Quality Requirements**:
+- Confidence score ≥ 0.6
+- Content length ≥ 100 characters
+- Well-categorized with tags
+- Not trivial or generic
+
+### 6. Query Interface (MCP Server)
+
+**Purpose**: Enable agents to query learnings
+
+**Protocol**: Model Context Protocol (MCP)
+
+**Tools**:
+- `search_learnings`: Query by text, category, tags
+- `get_learning_by_id`: Retrieve specific learning
+- `get_learning_context`: Full conversation for learning
+
+**Resources**:
+- `context://learnings/recent`: Latest learnings
+- `context://learnings/top-rated`: Highest confidence
+- `context://stats`: Network statistics
+
+**Performance**: All queries < 200ms
+
+### 7. Network Layer
+
+**Purpose**: Share learnings globally with rewards
+
+**Components**:
+- **IPFS Client**: Decentralized storage
+- **Blockchain Integration**: Transaction handling
+- **Token System**: Reward calculation
+- **Validator Network**: Quality validation (future)
+
+**Upload Process**:
+1. Learning queued for upload
+2. Content uploaded to IPFS → CID generated
+3. Blockchain transaction with CID
+4. Token reward calculated
+5. Status tracked in uploads table
+
+## Data Flow
+
+### Happy Path: Conversation → Global Network
+
+```
+1. User interacts with Claude Code
+   ↓
+2. Hooks capture UserPromptSubmit + Stop events
+   ↓
+3. Events queued (< 100ms, non-blocking)
+   ↓
+4. Async worker picks up sanitization job
+   ↓
+5. Sanitization pipeline removes ALL PII
+   ↓
+6. Sanitized data stored in SQLite
+   ↓
+7. Learning extraction job queued
+   ↓
+8. Async worker extracts learnings
+   ↓
+9. Quality filter scores and filters learnings
+   ↓
+10. High-quality learnings queued for upload
+   ↓
+11. Mining worker uploads to IPFS
+   ↓
+12. Blockchain transaction records upload
+   ↓
+13. Token reward distributed
+   ↓
+14. Other agents query via MCP server
+```
+
+## Privacy Guarantees
+
+### Zero-Trust PII Handling
+
+**Rule 1**: Never store unsanitized data
+**Rule 2**: Sanitize before database insertion
+**Rule 3**: Audit all redactions
+**Rule 4**: User control over uploads
+
+### Sanitization Validation
+
+**Rule-Based Layer** (Fast, Deterministic):
+- Regex patterns for known PII formats
+- < 1% false positive rate
+- Processing time < 10ms
+
+**AI Layer** (Accurate, Context-Aware):
+- LLM-based context analysis
+- Distinguishes names from variables
+- Handles company-specific terminology
+- < 5% false negative rate
+
+**Hybrid Validation**:
+- Rules catch obvious cases quickly
+- AI validates and enhances
+- Combined result sanitized
+- Audit log tracks all detections
+
+## Performance Requirements
+
+| Component | Requirement | Rationale |
+|-----------|-------------|-----------|
+| Hook Execution | < 100ms | Never block user |
+| Event Queueing | < 50ms | Fast persistence |
+| Sanitization | < 2s per conversation | Acceptable async delay |
+| Database Queries | < 100ms | Responsive queries |
+| MCP Queries | < 200ms | Agent experience |
+| Learning Extraction | < 5s per conversation | Background processing |
+
+## Scalability Considerations
+
+### Current (MVP)
+- Single SQLite database
+- Local processing
+- File-based queue
+
+### Future Scaling
+- PostgreSQL for multi-user
+- Distributed job queue (Redis)
+- Horizontal worker scaling
+- CDN for IPFS content
+- Sharded blockchain integration
+
+## Security Model
+
+### Threat Model
+
+**Threats Addressed**:
+1. PII Leakage → Sanitization before storage
+2. Unauthorized Access → Local-first architecture
+3. Data Corruption → ACID transactions
+4. Injection Attacks → Parameterized queries
+5. Secret Exposure → Hook-level filtering
+
+**Future Threats**:
+1. Network Byzantine actors → Validator consensus
+2. Spam/Junk learnings → Quality scoring + validation
+3. Sybil attacks → Identity verification
+4. Reward manipulation → Multi-validator consensus
+
+### Access Control
+
+**MVP**: Local-only access (single user)
+
+**Future**:
+- Multi-user authentication
+- Role-based access control
+- API key management for MCP
+- Encrypted storage option
+
+## Technology Stack
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Runtime | Node.js + TypeScript | Type safety, async-first |
+| Database | SQLite | Simple, embedded, ACID |
+| Testing | Vitest | Fast, modern, TypeScript-first |
+| Sanitization | Regex + Claude API | Hybrid approach |
+| MCP Server | @modelcontextprotocol/sdk | Standard protocol |
+| Blockchain | TBD (Ethereum/Celestia) | EVM compatibility |
+| Storage | IPFS | Decentralized, content-addressed |
+| Queue | SQLite-based | Simple, persistent |
+
+## Error Handling
+
+### Graceful Degradation
+
+**Hooks Fail**: Log error, don't block user
+**Sanitization Fails**: Quarantine conversation, alert
+**Learning Extraction Fails**: Mark for manual review
+**Upload Fails**: Retry with exponential backoff
+**MCP Query Fails**: Return empty with error message
+
+### Recovery Strategies
+
+1. **Job Retries**: Max 3 attempts with backoff
+2. **Dead Letter Queue**: Failed jobs for analysis
+3. **Manual Review**: Quarantine for complex cases
+4. **Rollback**: Database migrations reversible
+5. **Audit Trail**: Full logging for debugging
+
+## Testing Strategy
+
+### Test Pyramid
+
+- **70% Unit Tests**: Isolated component testing
+- **20% Integration Tests**: Component interactions
+- **10% E2E Tests**: Full system workflows
+
+### Critical Test Coverage
+
+1. **Sanitization**: Zero PII leaks in 1000+ test cases
+2. **Hooks**: Non-blocking, error handling
+3. **Queue**: No job loss, proper ordering
+4. **Database**: ACID compliance, concurrency
+5. **MCP**: Protocol compliance, performance
+
+### Claude-Powered Testing Harness
+
+Uses Claude Agent SDK to:
+- Generate comprehensive test suites
+- Validate test quality
+- Verify implementations
+- Enforce quality gates
+
+## Deployment Architecture
+
+### MVP (Local Development)
+```
+User Machine:
+  - Claude Code with hooks
+  - SQLite database
+  - Background workers
+  - MCP server (local)
+```
+
+### Production (Future)
+```
+User Machines:
+  - Claude Code with hooks
+  - Local SQLite cache
+  - MCP client
+
+Cloud Infrastructure:
+  - PostgreSQL cluster
+  - Worker pool (auto-scaling)
+  - MCP server (HA)
+  - IPFS node/gateway
+  - Blockchain node
+```
+
+## Integration Points
+
+### Claude Code Hooks
+- Configuration via `hooks.json`
+- Scripts in `.claude/hooks/`
+- Environment variables for paths
+
+### MCP Protocol
+- Standard MCP server implementation
+- Claude Code auto-discovery
+- Tool and resource definitions
+
+### Blockchain
+- Smart contract for rewards
+- Event listening for confirmations
+- Wallet integration for payouts
+
+### IPFS
+- Content upload via API
+- CID generation and tracking
+- Gateway for content retrieval
+
+## Monitoring & Observability
+
+### Key Metrics
+
+**Performance**:
+- Hook execution time
+- Sanitization duration
+- Query response time
+- Job processing rate
+
+**Quality**:
+- PII detection rate
+- Learning confidence scores
+- Test coverage percentage
+- Quality gate pass rate
+
+**Business**:
+- Conversations captured
+- Learnings extracted
+- Network uploads
+- Token rewards distributed
+
+### Logging Strategy
+
+1. **Structured Logging**: JSON format
+2. **Log Levels**: DEBUG, INFO, WARN, ERROR
+3. **Correlation IDs**: Track conversation flow
+4. **Audit Trail**: All PII redactions
+5. **Performance Metrics**: Timing for all operations
+
+## Related Documents
+
+### Architecture
+- [Subagent System](./architecture-subagent-system-2025-01-16.md)
+- [Testing Harness](./architecture-testing-harness-2025-01-16.md)
+- [Sanitization Pipeline](./architecture-sanitization-pipeline-2025-01-16.md)
+- [Database Schema](./architecture-database-schema-2025-01-16.md)
+
+### Decisions
+- [ADR: Use Claude Hooks](../decisions/decision-use-claude-hooks-2025-01-16.md)
+- [ADR: Sanitize Before Storage](../decisions/decision-sanitize-before-storage-2025-01-16.md)
+- [ADR: Subagent-Driven Development](../decisions/decision-subagent-driven-development-2025-01-16.md)
+
+### Plans
+- [Implementation Roadmap](../plans/plan-implementation-roadmap-2025-01-16.md)
+- [Original User Vision](../plans/plan-original-user-vision-2025-01-16.md)
+
+### Reference
+- [Database Schema Reference](../reference/reference-database-schema-2025-01-16.md)
+- [Testing Strategy](../reference/reference-testing-strategy-2025-01-16.md)
+
+================
+File: architecture/architecture-subagent-system-2025-01-16.md
+================
+# Subagent System Architecture
+
+> Architecture for subagent-driven development using Claude Agent SDK
+
+---
+title: Subagent System Architecture
+category: architecture
+date: 2025-01-16
+status: active
+authors: Claude + Dennison
+tags: [subagents, claude-agent-sdk, development-workflow, parallelization]
+---
+
+## Overview
+
+The Global Context Network uses a **subagent-driven development model** where ALL implementation and testing is delegated to specialized Claude agents. This ensures focused expertise, parallel execution, and built-in quality validation.
+
+**Core Principle**: Never implement directly - always delegate to specialized subagents.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    Main Orchestrator Agent                        │
+│                  (Claude Code Main Session)                       │
+└────────────┬───────────────────────────────┬─────────────────────┘
+             │                                │
+             ▼ Delegation                    ▼ Delegation
+┌────────────────────────┐      ┌────────────────────────┐
+│ Implementation Subagent│      │    Test Subagent       │
+│  - Reads requirements  │      │  - Generates tests     │
+│  - Writes code         │      │  - Validates quality   │
+│  - Runs locally        │      │  - Checks coverage     │
+└────────────┬───────────┘      └────────────┬───────────┘
+             │                                │
+             │                                │
+             ▼                                ▼
+┌────────────────────────┐      ┌────────────────────────┐
+│  Quality Gate Subagent │◄─────┤ Integration Subagent   │
+│  - Lint + Type Check   │      │  - Component testing   │
+│  - Security scan       │      │  - E2E validation      │
+│  - Performance review  │      │  - Regression check    │
+└────────────────────────┘      └────────────────────────┘
+```
+
+## Subagent Types
+
+### 1. Implementation Subagents
+
+**Purpose**: Build features and components
+
+**Specialized By Phase**:
+
+| Phase | Subagent | Responsibility | Tools |
+|-------|----------|----------------|-------|
+| 0 | `foundation-setup-agent` | TypeScript + Vitest setup | Write, Bash, Read |
+| 0 | `database-schema-agent` | Schema + migrations | Write, Bash |
+| 0 | `test-infrastructure-agent` | Test utilities | Write, Read |
+| 1 | `hook-developer-agent` | Hook scripts | Write, Bash, Read |
+| 1 | `event-collector-agent` | Event aggregation | Write, Read |
+| 1 | `queue-system-agent` | Persistent queue | Write, Bash |
+| 2 | `rule-sanitizer-agent` | Regex PII detection | Write, Read |
+| 2 | `ai-sanitizer-agent` | LLM sanitization | Write, Read |
+| 2 | `sanitization-pipeline-agent` | Pipeline orchestration | Write, Read |
+| 3 | `repository-agent` | Repository pattern | Write, Read |
+| 3 | `query-optimization-agent` | Indexes + queries | Write, Bash |
+| 4 | `job-queue-agent` | Queue implementation | Write, Read |
+| 4 | `worker-agent` | Worker processes | Write, Bash |
+| 5 | `learning-extractor-agent` | Extraction pipeline | Write, Read |
+| 5 | `quality-filter-agent` | Scoring + filtering | Write, Read |
+| 6 | `mcp-protocol-agent` | MCP implementation | Write, Read |
+| 6 | `query-optimization-agent` | Search + filtering | Write, Bash |
+| 7 | `ipfs-integration-agent` | IPFS uploads | Write, Bash |
+| 7 | `blockchain-agent` | Blockchain transactions | Write, Bash |
+
+**Configuration Example**:
+```typescript
+{
+  "hook-developer-agent": {
+    description: "Implements Claude Code hooks for event capture",
+    prompt: `You are a Claude Code hooks expert. Implement:
+    - UserPromptSubmit hook (< 100ms)
+    - Stop hook (< 100ms)
+    - Event serialization
+    - Error handling (never block user)
+    Follow TDD: write tests first.`,
+    tools: ["Write", "Read", "Bash", "mcp__test-runner__run_unit_tests"],
+    model: "sonnet"
+  }
+}
+```
+
+### 2. Test Generation Subagents
+
+**Purpose**: Create comprehensive test suites
+
+**Types**:
+
+**Unit Test Generator**:
+```typescript
+{
+  "unit-test-generator": {
+    description: "Generates unit tests with 100% coverage target",
+    prompt: `Generate unit tests following TDD:
+    - Test each function in isolation
+    - Cover edge cases and boundaries
+    - Test error conditions
+    - Use proper arrange-act-assert
+    - Mock external dependencies
+    Target: > 85% coverage`,
+    tools: ["Write", "Read", "mcp__test-runner__validate_test_quality"],
+    model: "sonnet"
+  }
+}
+```
+
+**Integration Test Generator**:
+```typescript
+{
+  "integration-test-generator": {
+    description: "Creates integration tests for component interactions",
+    prompt: `Generate integration tests:
+    - Test component interactions
+    - Use real dependencies where safe
+    - Test database transactions
+    - Verify async behavior
+    - Check error propagation`,
+    tools: ["Write", "Read", "Bash", "mcp__test-runner__run_integration_tests"],
+    model: "sonnet"
+  }
+}
+```
+
+**E2E Test Generator**:
+```typescript
+{
+  "e2e-test-generator": {
+    description: "Creates end-to-end workflow tests",
+    prompt: `Generate E2E tests:
+    - Test complete user workflows
+    - Hook → Database → MCP flow
+    - Sanitization → Learning → Upload flow
+    - Verify system behavior
+    - Test failure scenarios`,
+    tools: ["Write", "Read", "Bash", "mcp__test-runner__run_e2e_tests"],
+    model: "sonnet"
+  }
+}
+```
+
+### 3. Test Validation Subagents
+
+**Purpose**: Validate test quality and implementation
+
+**Test Quality Validator**:
+```typescript
+{
+  "test-quality-validator": {
+    description: "Reviews test code quality and completeness",
+    prompt: `Validate tests for:
+    - Proper structure (describe, it, expect)
+    - Clear test names
+    - Complete edge case coverage
+    - Proper assertions (not just truthy)
+    - No flaky tests
+    - Maintainability
+    Score each test 0-1. Require > 0.8 to pass.`,
+    tools: ["Read", "Grep", "mcp__test-runner__validate_test_quality"],
+    model: "sonnet"
+  }
+}
+```
+
+**Coverage Validator**:
+```typescript
+{
+  "coverage-validator": {
+    description: "Ensures adequate test coverage",
+    prompt: `Analyze coverage:
+    - Lines, statements, functions, branches
+    - Identify uncovered code paths
+    - Flag critical missing tests
+    - Require > 85% coverage
+    - No untested error handlers`,
+    tools: ["Read", "Bash", "mcp__test-runner__get_coverage_report"],
+    model: "haiku"
+  }
+}
+```
+
+**Implementation Validator**:
+```typescript
+{
+  "implementation-validator": {
+    description: "Validates implementation against tests",
+    prompt: `Verify implementation:
+    - All tests pass
+    - Handles all edge cases from tests
+    - Proper error handling
+    - No security vulnerabilities
+    - Follows coding standards
+    - Performance acceptable`,
+    tools: ["Read", "Grep", "Bash", "mcp__test-runner__run_unit_tests"],
+    model: "sonnet"
+  }
+}
+```
+
+### 4. Quality Gate Subagents
+
+**Purpose**: Enforce standards before merge
+
+**Code Quality Validator**:
+```typescript
+{
+  "code-quality-validator": {
+    description: "Reviews code quality and standards",
+    prompt: `Review code for:
+    - TypeScript strict mode compliance
+    - ESLint rule adherence
+    - Prettier formatting
+    - Proper type annotations
+    - Clear naming conventions
+    - DRY principles
+    - SOLID principles
+    All checks must pass.`,
+    tools: ["Read", "Bash", "Grep"],
+    model: "sonnet"
+  }
+}
+```
+
+**Security Validator**:
+```typescript
+{
+  "security-validator": {
+    description: "Scans for security vulnerabilities",
+    prompt: `Security audit:
+    - SQL injection vulnerabilities
+    - Command injection risks
+    - Path traversal attempts
+    - Hardcoded secrets
+    - Insecure dependencies
+    - XSS vectors
+    Block if any critical issues found.`,
+    tools: ["Read", "Bash", "Grep"],
+    model: "sonnet"
+  }
+}
+```
+
+**Performance Validator**:
+```typescript
+{
+  "performance-validator": {
+    description: "Analyzes performance characteristics",
+    prompt: `Analyze performance:
+    - Algorithm complexity
+    - Database query efficiency
+    - Memory usage patterns
+    - Blocking operations
+    - Resource leaks
+    Flag performance regressions.`,
+    tools: ["Read", "Bash", "Grep"],
+    model: "sonnet"
+  }
+}
+```
+
+## Subagent Workflow
+
+### TDD Cycle with Subagents
+
+```
+1. 🔴 RED Phase (Test Generator Subagent)
+   ├─► Generate failing test
+   ├─► Validate test quality (Test Quality Validator)
+   └─► Ensure test properly fails
+
+2. 🟢 GREEN Phase (Implementation Subagent)
+   ├─► Write minimal code to pass test
+   ├─► Run tests continuously
+   └─► Validate implementation (Implementation Validator)
+
+3. 🔵 REFACTOR Phase (Refactor Subagent)
+   ├─► Improve code quality
+   ├─► Maintain passing tests
+   └─► Re-validate quality (Code Quality Validator)
+
+4. ✅ QUALITY GATE (Quality Gate Subagents)
+   ├─► Run all validators in parallel
+   ├─► Coverage > 85%
+   ├─► Security scan passes
+   ├─► Performance acceptable
+   └─► All gates MUST pass
+```
+
+### Parallel Execution
+
+Subagents can run in parallel when independent:
+
+```typescript
+// Phase 0 example: Parallel execution
+const response = query({
+  prompt: "Implement Phase 0 Foundation",
+  options: {
+    agents: {
+      "foundation-setup": { ... },
+      "database-schema": { ... },
+      "test-infrastructure": { ... }
+    }
+  }
+});
+
+// All three agents work simultaneously
+// Main agent coordinates and integrates results
+```
+
+### Sequential Dependencies
+
+Some subagents must wait for others:
+
+```
+foundation-setup ─► database-schema ─► test-infrastructure
+                    (needs project)    (needs database)
+```
+
+## Subagent Communication
+
+### Via Main Agent
+
+Subagents communicate through the main orchestrator:
+
+```typescript
+// Main agent delegates
+const testGenResult = await runSubagent("unit-test-generator", {...});
+
+// Main agent passes results to next subagent
+const implResult = await runSubagent("implementation-agent", {
+  tests: testGenResult.tests
+});
+
+// Main agent validates
+const validationResult = await runSubagent("implementation-validator", {
+  implementation: implResult.code,
+  tests: testGenResult.tests
+});
+```
+
+### Via Shared Context
+
+Subagents can access shared resources:
+- File system (read/write)
+- Database (queries)
+- Test results (via MCP tools)
+- Coverage reports (via MCP tools)
+
+## Benefits of Subagent Architecture
+
+### 1. Specialization
+Each subagent is expert in its domain:
+- Hook developer knows hook best practices
+- Test generator knows testing patterns
+- Security validator knows OWASP top 10
+
+### 2. Parallelization
+Independent tasks run concurrently:
+- Multiple components implemented simultaneously
+- Tests generated while implementation proceeds
+- Validators run in parallel for quality gates
+
+### 3. Quality Assurance
+Built-in validation at every step:
+- Test quality validated before implementation
+- Implementation validated against tests
+- Quality gates enforce standards
+
+### 4. Maintainability
+Clear separation of concerns:
+- Each subagent has focused responsibility
+- Easy to update individual agents
+- Consistent patterns across codebase
+
+### 5. Auditability
+Complete trace of decisions:
+- Each subagent produces artifacts
+- Validation results documented
+- Quality scores tracked
+
+## Configuration Management
+
+### Subagent Definitions
+
+Stored in configuration files:
+
+```typescript
+// subagents/implementation-agents.ts
+export const implementationAgents = {
+  "hook-developer-agent": { ... },
+  "event-collector-agent": { ... },
+  // ... more agents
+};
+
+// subagents/test-agents.ts
+export const testAgents = {
+  "unit-test-generator": { ... },
+  "integration-test-generator": { ... },
+  // ... more agents
+};
+
+// subagents/validation-agents.ts
+export const validationAgents = {
+  "test-quality-validator": { ... },
+  "coverage-validator": { ... },
+  // ... more agents
+};
+```
+
+### Agent Orchestration
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import { implementationAgents, testAgents, validationAgents } from './subagents';
+
+export async function implementPhase(phaseNumber: number) {
+  const response = query({
+    prompt: `Implement Phase ${phaseNumber} following TDD`,
+    options: {
+      model: "claude-sonnet-4-5",
+      agents: {
+        ...implementationAgents,
+        ...testAgents,
+        ...validationAgents
+      },
+      mcpServers: {
+        "test-runner": testRunnerServer
+      }
+    }
+  });
+
+  for await (const message of response) {
+    // Process subagent communications
+    if (message.type === 'system' && message.subtype === 'subagent_start') {
+      console.log(`Starting: ${message.agent_name}`);
+    }
+    if (message.type === 'system' && message.subtype === 'subagent_end') {
+      console.log(`Completed: ${message.agent_name}`);
+    }
+  }
+}
+```
+
+## Error Handling
+
+### Subagent Failures
+
+**Retry Logic**:
+```typescript
+async function runWithRetry(subagentName: string, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await runSubagent(subagentName);
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      await sleep(2 ** i * 1000); // Exponential backoff
+    }
+  }
+}
+```
+
+**Fallback Strategies**:
+- If test generator fails → Manual test creation prompt
+- If implementation fails → Simplify requirements
+- If validator fails → Manual review required
+
+### Quality Gate Failures
+
+**Block and Report**:
+```typescript
+if (validationResult.coverageScore < 0.85) {
+  throw new Error(`Coverage ${validationResult.coverageScore} < 0.85 required`);
+}
+
+if (validationResult.securityIssues.length > 0) {
+  throw new Error(`Security issues: ${validationResult.securityIssues.join(', ')}`);
+}
+```
+
+## Performance Optimization
+
+### Selective Subagent Invocation
+
+Don't invoke all subagents for every task:
+
+```typescript
+// Simple task: minimal validation
+if (task.complexity === 'simple') {
+  agents = ['implementation-agent', 'unit-test-generator'];
+}
+
+// Complex task: full validation
+if (task.complexity === 'complex') {
+  agents = [
+    'implementation-agent',
+    'unit-test-generator',
+    'integration-test-generator',
+    'test-quality-validator',
+    'code-quality-validator',
+    'security-validator'
+  ];
+}
+```
+
+### Caching Results
+
+Cache subagent results to avoid re-runs:
+
+```typescript
+const cache = new Map<string, SubagentResult>();
+
+async function getCachedSubagentResult(name: string, input: any) {
+  const key = `${name}:${JSON.stringify(input)}`;
+  if (cache.has(key)) {
+    return cache.get(key);
+  }
+  const result = await runSubagent(name, input);
+  cache.set(key, result);
+  return result;
+}
+```
+
+## Monitoring & Metrics
+
+### Subagent Performance
+
+Track subagent execution:
+- Invocation count
+- Success rate
+- Average duration
+- Error types
+
+### Quality Metrics
+
+Track validation results:
+- Test coverage trends
+- Quality gate pass rate
+- Security issue count
+- Performance regression count
+
+## Related Documents
+
+### Architecture
+- [Global Context Network](./architecture-global-context-network-2025-01-16.md)
+- [Testing Harness](./architecture-testing-harness-2025-01-16.md)
+
+### Decisions
+- [ADR: Subagent-Driven Development](../decisions/decision-subagent-driven-development-2025-01-16.md)
+
+### Guides
+- [Using Subagents](../guides/guide-using-subagents-2025-01-16.md)
+- [TDD Workflow](../guides/guide-tdd-workflow-2025-01-16.md)
+
+### Reference
+- [Subagent Types](../reference/reference-subagent-types-2025-01-16.md)
+- [Claude Agent SDK API](../reference/reference-claude-agent-sdk-api-2025-01-16.md)
+
+================
+File: architecture/INDEX.md
+================
+# Architecture Documentation
+
+> Last updated: 2025-01-16
+
+## Overview
+
+This directory contains system design documents, component architectures, and technical specifications for the Global Context Network MVP.
+
+## Documents
+
+### Active Documents
+
+| Date | Document | Status | Description |
+|------|----------|--------|-------------|
+| 2025-01-16 | [architecture-global-context-network-2025-01-16.md](./architecture-global-context-network-2025-01-16.md) | Active | Complete system architecture overview |
+| 2025-01-16 | [architecture-subagent-system-2025-01-16.md](./architecture-subagent-system-2025-01-16.md) | Active | Subagent-driven development architecture |
+| 2025-01-16 | [architecture-testing-harness-2025-01-16.md](./architecture-testing-harness-2025-01-16.md) | Active | Claude-powered testing infrastructure |
+| 2025-01-16 | [architecture-hooks-event-capture-2025-01-16.md](./architecture-hooks-event-capture-2025-01-16.md) | Active | Hook implementation and event capture system |
+| 2025-01-16 | [architecture-sanitization-pipeline-2025-01-16.md](./architecture-sanitization-pipeline-2025-01-16.md) | Active | PII detection and sanitization architecture |
+| 2025-01-16 | [architecture-learning-extraction-2025-01-16.md](./architecture-learning-extraction-2025-01-16.md) | Active | Learning extraction and quality scoring |
+| 2025-01-16 | [architecture-mcp-server-2025-01-16.md](./architecture-mcp-server-2025-01-16.md) | Active | MCP server implementation for agent queries |
+| 2025-01-16 | [architecture-database-schema-2025-01-16.md](./architecture-database-schema-2025-01-16.md) | Active | Database schema design and migrations |
+
+## Key Architectural Patterns
+
+### Privacy-First Design
+ALL data is sanitized BEFORE storage. The system guarantees zero PII leaks through:
+- Rule-based PII detection (fast, deterministic)
+- AI-powered context-aware sanitization
+- Hybrid validation pipeline
+- Audit logging for continuous improvement
+
+### Subagent-Driven Development
+Every component is implemented by specialized subagents:
+- Implementation subagents build features
+- Test subagents generate and validate tests
+- Quality gate subagents enforce standards
+- Integration subagents verify component interactions
+
+### Async-First Architecture
+Non-blocking design with persistent queues:
+- Event capture never blocks user
+- Sanitization runs asynchronously
+- Learning extraction happens in background
+- Mining/upload processes independently
+
+## System Components
+
+1. **Event Capture Layer** (Hooks + Queue)
+2. **Sanitization Pipeline** (Rules + AI)
+3. **Storage Layer** (SQLite + Migrations)
+4. **Async Processing** (Job Queue + Workers)
+5. **Learning Extraction** (Analysis + Scoring)
+6. **Query Interface** (MCP Server)
+7. **Network Layer** (IPFS + Blockchain)
+
+## Related Categories
+
+- [Decisions](../decisions/INDEX.md) - ADRs explaining architectural choices
+- [Plans](../plans/INDEX.md) - Implementation roadmaps
+- [Reference](../reference/INDEX.md) - Technical specifications
+
+## Quick Tips
+
+- Start with the global architecture document for overview
+- Review component-specific docs for deep dives
+- Check ADRs for rationale behind decisions
+- Use diagrams for understanding data flow
+
+================
+File: plans/plan-original-user-vision-2025-01-16.md
+================
+# Original User Vision - Global Context Network
+
+> Capturing the user's original concept and requirements
+
+---
+title: Original User Vision for Global Context Network
+category: plan
+date: 2025-01-16
+status: active
+authors: Dennison (User) + Claude
+tags: [vision, requirements, original-concept, blockchain, learning-network]
+---
+
+## User's Original Request
+
+**Date**: 2025-01-16
+
+### The Core Idea
+
+*"I'm thinking about building a global context network for AI agents to learn from one another. Basically right now when I work through a project like when I'm doing a TypeScript development project there will be some sort of problem that I have to end up solving and working through with the agent. The learnings from this tend to just be lost to this specific project but I think it would be really interesting if these learnings could be shared with my other projects but also globally with everyone."*
+
+### Unique Approach
+
+*"It would be to use Claude Code hooks so to start with Claude Code so that before every prompt or before the LLM takes action we write to database my prompt and then when the LLM finishes action you know we write to the database everything that the LLM said and you know ideally all of their thinking processes and we do that for the entire conversation."*
+
+### Privacy-First Design
+
+*"There's a second step where another LLM takes out all the personally identifiable information so that's like API keys directories you know specific names of things so that we aren't leaking information and that could actually happen in the step before writing to the database just in case so we never have to worry about leaking data."*
+
+### Decentralized Storage
+
+*"Then we put that data on chain or we put it into IPFS and put a hash a pin of hash of it into the blockchain or we could put it into something like Celestia for example so it goes from the agent itself working through sanitation for private information into a database and then from a database into a global pool that's available for everyone."*
+
+### Mining Through Learning
+
+*"The process of providing it to this global pool would be sort of like a new-age version of cryptocurrency mining so by providing context to the pool you are effectively mining but you don't get the payout immediately because you could just stream junk from an LLM into this."*
+
+### Validator Network
+
+*"What we would have is validators there'd be a validator network which would be other agents who basically read this sort of context thread read this complete summary to digest learnings from it and decide whether or not this is a valid addition to the context pool."*
+
+### Data Processing Pipeline
+
+*"You have an agent that sanitizes the personal information before it goes into the database and then you have another agent that asynchronously summarizes the learnings of the process and then we store the learnings of the process into the global pool or maybe we store both."*
+
+*"Then we have a validator network of agents which validate that this submission is good or you know contains good information or it seems valid basically it's like a eval running evals on this submitted data. You would need sort of like a quorum of agents to decide that it is valid and if it's valid then we distribute tokens out to the agent that provided it."*
+
+### Query Interface
+
+*"Now that information gets stored into the sort of global context database and we have a model context protocol server that agents can use when they start a process project where they can check this global database for learnings."*
+
+*"So if you're familiar with context 7 which is basically database around docs this would essentially be like a database around learnings so we could share these learnings and effectively by doing that you are mining so you're providing learnings to the network and then the network is rewarding with tokens."*
+
+## MVP Scope (User-Defined)
+
+*"I would like to build an MVP of this and what I'm thinking of is hooks for Claude code that take both every prompt end prompt and then you know any context in between runs it through sanitization in a sub-agent probably with Claude code then stores it directly into a SQLite database."*
+
+*"Then kicks off another async process so there's sort of like a queue of analyzing each chunk that comes in and you know updating an idea of the learnings that are going so that you know you don't have to remember you know you can close the window without losing all the learnings but each time you know you update there's some new learnings the learnings are stored in the database as well."*
+
+*"And then after that it goes into another process async like a mining process it may be this like a miner that's running at the same time or just runs in the background because you were running in the first place and then that uploads it to the context Network."*
+
+*"Then you have model context protocol which allows the ages to query that network and maybe potentially you know generate a key pair to collect funds."*
+
+## Key Requirements Identified
+
+### 1. Capture Layer
+- ✅ Use Claude Code hooks
+- ✅ Capture every user prompt (UserPromptSubmit)
+- ✅ Capture every agent response (Stop)
+- ✅ Include thinking processes if available
+- ✅ Never block the user
+
+### 2. Privacy Layer
+- ✅ Sanitize BEFORE database storage
+- ✅ Remove API keys
+- ✅ Remove directory paths
+- ✅ Remove specific names
+- ✅ Use another agent for sanitization
+- ✅ Never leak PII
+
+### 3. Storage Layer
+- ✅ SQLite database
+- ✅ Store sanitized conversations
+- ✅ Store extracted learnings
+- ✅ Persist across window closes
+- ✅ Queue-based processing
+
+### 4. Learning Extraction
+- ✅ Async processing
+- ✅ Summarize learnings continuously
+- ✅ Update as new chunks arrive
+- ✅ Store learnings in database
+
+### 5. Mining/Upload
+- ✅ Background process
+- ✅ Async upload to network
+- ✅ IPFS or blockchain storage
+- ✅ Token reward tracking
+
+### 6. Query Interface
+- ✅ Model Context Protocol server
+- ✅ Allow agents to query learnings
+- ✅ Key pair for fund collection
+- ✅ Similar to Context7 for docs
+
+### 7. Validator Network (Future)
+- 🔮 Agent validators
+- 🔮 Quality evaluation
+- 🔮 Quorum-based validation
+- 🔮 Token distribution on validation
+
+## Design Principles Extracted
+
+### Privacy-First
+*"Sanitization happens before writing to database just in case so we never have to worry about leaking data."*
+
+**Implementation**: Zero-trust PII handling with sanitization before storage.
+
+### Async Everything
+*"Kicks off another async process... a mining process... running in the background."*
+
+**Implementation**: Job queue system with async workers for all processing.
+
+### Never Lose Data
+*"You can close the window without losing all the learnings."*
+
+**Implementation**: Persistent queue and continuous learning extraction.
+
+### Quality Through Validation
+*"Validators... decide whether or not this is a valid addition."*
+
+**Implementation**: Quality scoring and validator network (future).
+
+### Incentive Alignment
+*"By providing learnings to the network... the network is rewarding with tokens."*
+
+**Implementation**: Token rewards for quality contributions.
+
+## Evolution from Original Vision to MVP Plan
+
+### What Stayed the Same
+1. ✅ Claude Code hooks for capture
+2. ✅ Sanitization before storage
+3. ✅ SQLite database
+4. ✅ Async processing
+5. ✅ Learning extraction
+6. ✅ MCP server interface
+7. ✅ IPFS/blockchain upload
+
+### What Was Enhanced
+1. **Subagent-Driven Development**: All implementation via specialized subagents
+2. **Claude Testing Harness**: Self-validating system using Claude Agent SDK
+3. **Hybrid Sanitization**: Rule-based + AI for better accuracy
+4. **Detailed Architecture**: 7-phase implementation plan with testable components
+5. **Quality Gates**: Automated validation at every step
+
+### What Was Deferred to Post-MVP
+1. Validator network (quorum-based validation)
+2. Multi-user support
+3. Distributed storage
+4. Complex token economics
+5. Smart contract deployment
+
+## Success Metrics (From User Intent)
+
+### Functional Success
+- ✅ Learnings captured from every conversation
+- ✅ Zero PII leaks
+- ✅ Learnings queryable via MCP
+- ✅ Works across different projects
+- ✅ Async processing doesn't block workflow
+
+### User Experience Success
+- ✅ Transparent to normal workflow
+- ✅ No performance impact on Claude Code
+- ✅ Easy to query learnings
+- ✅ Learnings actually useful
+- ✅ Trust in privacy guarantees
+
+### Network Success (Future)
+- 🔮 High-quality learnings contributed
+- 🔮 Learnings validated by community
+- 🔮 Token rewards distributed fairly
+- 🔮 Network grows organically
+- 🔮 Agents actively query network
+
+## User's Vision for Impact
+
+### Individual Developer Level
+- Learn from own past experiences
+- Share learnings across projects
+- Build personal knowledge base
+- Improve over time automatically
+
+### Team Level
+- Share learnings within organization
+- Onboard new developers faster
+- Standardize best practices
+- Collective intelligence growth
+
+### Global Level
+- AI agents learn from each other
+- Best practices emerge organically
+- Problems solved once, shared globally
+- Accelerate software development
+- Democratize expert knowledge
+
+## Key Insights from User
+
+### Problem Statement
+*"The learnings from this tend to just be lost to this specific project."*
+
+**Solution**: Persistent storage and global sharing of learnings.
+
+### Value Proposition
+*"It would be really interesting if these learnings could be shared with my other projects but also globally with everyone."*
+
+**Implementation**: MCP server for cross-project queries + global network for sharing.
+
+### Trust Requirement
+*"We never have to worry about leaking data."*
+
+**Guarantee**: Sanitize BEFORE storage, never trust raw data.
+
+### Quality Control
+*"You could just stream junk from an LLM into this."*
+
+**Solution**: Quality scoring + validator network + token incentives.
+
+## Alignment with Claude Code Philosophy
+
+The user's vision aligns perfectly with Claude Code's capabilities:
+
+1. **Hooks System**: Native support for capturing events
+2. **Subagent Support**: Built-in task delegation
+3. **MCP Integration**: Standard protocol for tools
+4. **File Access**: Can read/write for learning storage
+5. **Bash Access**: Can run background processes
+
+## Implementation Strategy
+
+### Phase-Based Rollout
+
+**Phases 0-3 (Weeks 1-3)**: Core Infrastructure
+- Foundation, event capture, sanitization, storage
+- **User Value**: Learnings saved locally, queryable
+
+**Phases 4-6 (Weeks 4-6)**: Intelligence Layer
+- Async processing, learning extraction, MCP server
+- **User Value**: Quality learnings, cross-project queries
+
+**Phase 7 (Week 6-7)**: Global Network
+- IPFS upload, blockchain integration
+- **User Value**: Share globally, earn rewards
+
+### Post-MVP Enhancements
+
+**Validator Network**:
+- Multi-agent quality validation
+- Quorum-based consensus
+- Token distribution on validation
+
+**Advanced Features**:
+- Semantic search
+- Learning recommendations
+- Trend analysis
+- Community curation
+
+## Related Documents
+
+### Architecture
+- [Global Context Network Architecture](../architecture/architecture-global-context-network-2025-01-16.md)
+- [Subagent System](../architecture/architecture-subagent-system-2025-01-16.md)
+- [Sanitization Pipeline](../architecture/architecture-sanitization-pipeline-2025-01-16.md)
+
+### Plans
+- [Implementation Roadmap](./plan-implementation-roadmap-2025-01-16.md)
+- [Global Context Network MVP](./plan-global-context-network-mvp-2025-01-16.md)
+
+### Decisions
+- [ADR: Use Claude Hooks](../decisions/decision-use-claude-hooks-2025-01-16.md)
+- [ADR: Sanitize Before Storage](../decisions/decision-sanitize-before-storage-2025-01-16.md)
+
+---
+
+*This document preserves the user's original vision and requirements to ensure the implementation stays aligned with the core intent.*
+
+================
+File: INDEX.md
+================
+# Documentation Index
+
+> Last updated: 2025-01-16
+
+## Overview
+
+This directory contains all project documentation for the Global Context Network MVP - a system that captures Claude Code conversations, sanitizes them for PII, stores learnings, and shares them globally via blockchain/IPFS with token rewards.
+
+**Core Philosophy**: Subagent-driven development with Claude-powered testing harness.
+
+## Quick Links
+
+- [Architecture](./architecture/INDEX.md) - System design, components, and data flow
+- [Decisions](./decisions/INDEX.md) - Architecture Decision Records (ADRs)
+- [Plans](./plans/INDEX.md) - Implementation plans, roadmaps, and task breakdowns
+- [Guides](./guides/INDEX.md) - How-to guides for development and testing
+- [Reference](./reference/INDEX.md) - Technical reference materials and APIs
+- [Learnings](./learnings/INDEX.md) - Insights, retrospectives, and discoveries
+
+## Project Goals
+
+1. **Capture**: Hook into Claude Code to capture conversations
+2. **Sanitize**: Remove ALL PII before storage (privacy-first)
+3. **Extract**: Generate valuable, reusable learnings
+4. **Share**: Upload to global network (IPFS + blockchain)
+5. **Query**: MCP server for agents to access learnings
+6. **Reward**: Token rewards for quality contributions
+
+## Recent Documents
+
+| Date | Category | Document | Description |
+|------|----------|----------|-------------|
+| 2025-01-16 | plans | [Global Context Network MVP](./plans/plan-global-context-network-mvp-2025-01-16.md) | Complete MVP implementation plan |
+| 2025-01-16 | plans | [Original User Vision](./plans/plan-original-user-vision-2025-01-16.md) | User's original concept and requirements |
+| 2025-01-16 | architecture | [Global Context Network](./architecture/architecture-global-context-network-2025-01-16.md) | System architecture overview |
+| 2025-01-16 | architecture | [Subagent System](./architecture/architecture-subagent-system-2025-01-16.md) | Subagent-driven development architecture |
+| 2025-01-16 | architecture | [Testing Harness](./architecture/architecture-testing-harness-2025-01-16.md) | Claude-powered testing infrastructure |
+| 2025-01-16 | decision | [Subagent-Driven Development](./decisions/decision-subagent-driven-development-2025-01-16.md) | ADR: Why we use subagents for everything |
+| 2025-01-16 | decision | [Claude Testing Harness](./decisions/decision-claude-testing-harness-2025-01-16.md) | ADR: Self-validating development system |
+| 2025-01-16 | guide | [Using Subagents](./guides/guide-using-subagents-2025-01-16.md) | How to delegate to specialized subagents |
+| 2025-01-16 | guide | [Testing Harness Usage](./guides/guide-testing-harness-usage-2025-01-16.md) | How to use Claude-powered testing |
+
+## Document Count by Category
+
+- **Architecture**: 8 documents (system design, components, data flow)
+- **Decisions**: 6 ADRs (major architectural decisions)
+- **Plans**: 11 plans (MVP plan + 8 phase plans + supporting docs)
+- **Guides**: 6 guides (how-to documentation)
+- **Reference**: 4 references (API docs, schemas, strategies)
+- **Learnings**: 0 (will be populated during implementation)
+
+**Total**: 35 documents
+
+## Key Architectural Decisions
+
+1. **Hooks-Based Capture** - Use Claude Code hooks (UserPromptSubmit, Stop)
+2. **Privacy-First** - Sanitize BEFORE database storage, never store raw PII
+3. **Subagent-Driven** - ALL implementation via specialized subagents
+4. **Claude Testing** - Self-validating system using Claude Agent SDK
+5. **Async Processing** - Job queue for sanitization and learning extraction
+6. **SQLite Storage** - Local persistence with migration system
+7. **MCP Interface** - Standard protocol for agent queries
+8. **IPFS + Blockchain** - Decentralized global storage with rewards
+
+## Development Phases
+
+| Phase | Focus | Duration | Status |
+|-------|-------|----------|--------|
+| 0 | Foundation (TypeScript, DB, Tests) | Week 1 | Planned |
+| 1 | Event Capture (Hooks, Queue) | Week 1-2 | Planned |
+| 2 | Sanitization (PII Removal) | Week 2-3 | Planned |
+| 3 | Database & Storage | Week 3 | Planned |
+| 4 | Async Processing (Job Queue) | Week 4 | Planned |
+| 5 | Learning Extraction | Week 4-5 | Planned |
+| 6 | MCP Server | Week 5-6 | Planned |
+| 7 | Mining & Upload (IPFS/Blockchain) | Week 6-7 | Planned |
+
+## How to Use This Documentation
+
+### For Implementation
+1. Start with [Implementation Roadmap](./plans/plan-implementation-roadmap-2025-01-16.md)
+2. Review [Subagent Workflow](./plans/plan-subagent-workflow-2025-01-16.md)
+3. Follow phase-specific guides in `guides/`
+4. Reference architecture docs as needed
+
+### For Understanding the System
+1. Read [Global Context Network Architecture](./architecture/architecture-global-context-network-2025-01-16.md)
+2. Review [Architectural Decisions](./decisions/) for rationale
+3. Explore component-specific architecture docs
+
+### For Testing
+1. Follow [TDD Workflow Guide](./guides/guide-tdd-workflow-2025-01-16.md)
+2. Use [Testing Harness Usage](./guides/guide-testing-harness-usage-2025-01-16.md)
+3. Reference [Testing Strategy](./reference/reference-testing-strategy-2025-01-16.md)
+
+## Contributing
+
+When adding documentation:
+
+1. **Choose Category**: architecture, decisions, plans, guides, reference, or learnings
+2. **Name Properly**: `category-topic-2025-01-16.md` format
+3. **Use Template**: Follow markdown-organizer templates
+4. **Add Frontmatter**: Include all required metadata
+5. **Update Category INDEX**: Add entry to category's INDEX.md
+6. **Update This File**: Add to "Recent Documents" and update counts
+7. **Cross-Link**: Add "Related Documents" section with links
+
+## Templates
+
+All documentation follows standardized templates:
+- **Architecture**: System design with diagrams, components, trade-offs
+- **ADR**: Context, decision, consequences, alternatives
+- **Plan**: Goals, tasks, risks, success criteria
+- **Guide**: Step-by-step instructions with examples
+- **Reference**: Technical specifications and API docs
+- **Learning**: Insights with context and application
+
+## Navigation Tips
+
+- Use category INDEX.md files for complete listings
+- Search by topic using your editor's find function
+- Follow cross-links in "Related Documents" sections
+- Check this master index for recent additions
+- All paths are relative for easy navigation
+
+## Project Links
+
+- **GitHub**: [Repository URL when created]
+- **Documentation**: This directory
+- **Tests**: `/tests/` directory
+- **Source**: `/src/` directory
+
+## Status Legend
+
+- 📝 **Planned**: Not yet started
+- 🚧 **In Progress**: Currently being implemented
+- ✅ **Complete**: Finished and validated
+- 📦 **Archived**: Superseded or no longer active
+
+---
+
+*This documentation follows the markdown-organizer skill guidelines for consistent, discoverable, well-organized documentation.*
+
+
+
+================================================================
+End of Codebase
+================================================================

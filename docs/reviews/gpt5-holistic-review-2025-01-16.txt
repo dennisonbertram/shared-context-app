@@ -1,0 +1,105 @@
+Executive summary
+Overall, the documentation is ambitious, thorough, and generally well-structured. It lays out clear goals, strong privacy principles, a TDD-first approach, and a credible phased roadmap. The subagent/testing harness model and performance/quality gates are particularly strong. However, there are several cross-document contradictions (most critically around privacy and persistence), missing referenced documents, and a few technically risky or inconsistent implementation details (hooks IO, queue schemas, status enums, and UUID/ULID, etc.). These must be reconciled before implementation to avoid policy violations and rework.
+
+If the critical issues below are addressed and the single source-of-truth clarified, the docs will be implementation-ready.
+
+Critical issues (must fix before implementation)
+1) Privacy guarantee contradiction: “sanitize before storage” vs persisting raw events
+- Some docs (ADR-004, DB reference) mandate NEVER storing unsanitized data and show no “events” table.
+- Architecture-hooks doc shows persisting raw “content” to an events table and generating idempotency keys using raw content. The queue code also persists “content” before sanitization.
+- Guides (Phase 1) implement “fastSanitize” in the hook and then persist sanitized content. This is the correct direction but conflicts with other docs.
+Required fixes:
+- Make a single canonical policy: pre-sanitize synchronously in the hook (fast rules) and only ever persist sanitized text (then optionally run AI post-check downstream).
+- Remove or rewrite any code/docs that store raw content in SQLite. If a pre-sanitization ring buffer is needed, it must be memory-only and exempt from disk persistence.
+- Update all schemas and code samples to reflect “sanitized_content” (or “content” that is guaranteed sanitized) everywhere. Never show examples that write raw text to disk.
+
+2) Event/queue schema and naming drift (events vs event_queue vs job_queue)
+- Hooks/event-capture doc uses “events” table with pending/processing statuses; guides use “event_queue”; DB reference includes no events table at all; job_queue exists with a different status vocabulary (queued/running/succeeded/failed).
+Required fixes:
+- Publish one canonical schema: If keeping a persistent “event_queue”, add it to the Database Schema Reference, or replace with writing directly to “messages” (sanitized-only) and use job_queue for downstream work. Eliminate the “events” table entirely.
+- Unify status enums across the stack (recommend: queued → in_progress/running → completed/succeeded → failed → dead_letter/quarantined) and update all code/docs consistently.
+
+3) Hook interface, IO path, and performance budget inconsistencies
+- Some code reads JSON from stdin; other samples use process.argv; performance.now() used without perf_hooks import; hooks refer to both .claude/hooks.json and .claude/hooks/hooks.json; scripts are TypeScript ts-node shebangs (risky for <100ms budget).
+Required fixes:
+- Confirm the current Claude Code hook contract and standardize on one IO method (stdin) and one config path (choose .claude/hooks.json or .claude/hooks/hooks.json and stick to it).
+- Ship compiled Node JS hooks (no ts-node at runtime). Provide build steps and point hooks.json to .js scripts.
+- Use performance from node:perf_hooks and validate actual end-to-end timings with SQLite WAL writes in the hook budget.
+
+4) Chain-of-thought handling contradictions
+- Original vision suggests capturing “thinking processes”; later ADRs say to exclude chain-of-thought entirely, aligning with provider policy.
+Required fixes:
+- Make chain-of-thought exclusion universal and remove any earlier language that implies capturing hidden reasoning. Ensure all examples and schemas never include thinking fields.
+
+5) Missing referenced documents and broken cross-links
+- Architecture INDEX references missing files: architecture-sanitization-pipeline, learning-extraction, mcp-server, database-schema (as architecture doc).
+- Hooks doc references non-existent references (reference-event-schema, reference-hook-configuration). Database reference links to a guide not present (guide-database-setup).
+Required fixes:
+- Either add these docs or remove/update the references. Provide a single, authoritative “Sanitization Pipeline” and “Learning Extraction” architecture doc consistent with the current plan and schema.
+
+6) Identity and ordering inconsistencies (UUID vs ULID; sequence calculation location)
+- Some docs use uuid v4; others recommend ULID for sortable IDs. Sequence numbers are computed from the events table that may not exist.
+Required fixes:
+- Decide on ULID or UUID globally and document rationale (ULID recommended for chronological sorting).
+- If discarding the events table, define how message sequence is computed (e.g., per conversation increment in the messages table in a transaction), and update code samples.
+
+7) Security/consent/licensing gate before upload
+- Plans and ADRs note the need for consent/licensing ADR but it’s not finalized. Upload gating/opt-in is critical before any global distribution.
+Required fixes:
+- Add an ADR specifying consent, licensing, default opt-in status (default off), and manual approval gate. Ensure this is enforced in upload workers and MCP.
+
+Major improvements (should address soon)
+- Publish a single “Source-of-Truth Data Flow” diagram: Hook (pre-sanitize in <50ms) → persist sanitized to messages (or event_queue sanitized-only) → job_queue → sanitization AI validation (optional enhancements) → learnings → uploads (with manual approval).
+- Align all schema docs to match the canonical design (tables, indexes, constraints). Ensure the Database Schema Reference includes every referenced table (if event_queue stays, document it; otherwise remove event-table references).
+- Provide LLM prompt templates and operational guardrails for the AI sanitization and learning extractors (temperature, max tokens, retries, deterministic fixtures).
+- Finalize idempotency strategy that doesn’t depend on raw content (e.g., session_id + role + sequence + timestamp bucket), document it, and implement in examples.
+- Strengthen the PII taxonomy across all docs: unify the list (emails, phones, IPs, file paths, API keys, JWTs, URLs with tokens, names, SSNs, credit cards, etc.), match it in patterns, ADRs, and acceptance tests.
+- Document hook packaging and cross-platform instructions (Windows/macOS/Linux), including “no ts-node in production hooks” and verified install steps.
+- MCP server contract correctness: confirm return formats align with MCP SDK expectations (tools/resources schemas), and add example request/response payloads that validate with the SDK.
+
+Minor suggestions (nice to have)
+- Replace fragile regexes with named, reviewed patterns and benchmarks; add property-based tests for corner cases (already planned) and specify minimization of over-redaction in docs.
+- Normalize timestamp format across code (prefer ISO-8601 strings or ms since epoch; pick one and stick to it).
+- Clarify use of WAL in tests: :memory: databases don’t meaningfully benefit from WAL; avoid setting WAL in unit tests for in-memory DB.
+- Replace pseudo references to metrics.* with a minimal pluggable metrics abstraction and provide a no-op default.
+- Use consistent file paths and names for hooks config (.claude/hooks.json), guide references, and package scripts.
+- Add a brief operational runbook (how to restart workers, recover queues, apply migrations, backup/restore) and a cost/SLO budget table for Claude API use.
+
+What’s done exceptionally well
+- Clear, principled privacy stance (when consistently applied): zero-trust, sanitize-before-storage, audit trail, canary scans.
+- Strong TDD/quality gates: coverage targets, performance budgets, adversarial tests, property-based testing, and a Claude-powered test harness with MCP tooling.
+- Subagent architecture: specialization, parallelization, quality gating, and explicit prompts/configs are well-thought-out for velocity and quality.
+- Comprehensive plans and acceptance criteria across phases with explicit risks, mitigations, and success metrics.
+- Database reference (once aligned): good use of ACID, WAL, FTS5 for learnings, constraints, and triggers.
+
+Technical accuracy spot-checks
+- Hook samples should not rely on ts-node at runtime; compiled JS is needed to meet <100ms with SQLite I/O.
+- performance.now() requires node:perf_hooks import in Node.
+- Some sample code (generateIdempotencyKey, getNextSequence, metrics.*) omits imports/implementations; mark as pseudocode or provide concrete utilities.
+- WAL in in-memory tests is not meaningful; fine for file-backed tests.
+- MCP test-runner tool returns look reasonable but should be validated against the MCP SDK schemas and include examples of tool calls/results.
+
+Implementation readiness
+Medium. A developer can start Phase 0/1 using the guides, but ambiguity around pre-sanitization vs persisted raw events, queue schemas, and hook interface could cause rework and policy violations. Resolve the critical contradictions, unify schemas, and finalize hook packaging and IO, then proceed.
+
+Risk coverage
+Good breadth: PII leakage, performance regression, async reliability, chain-of-thought exclusion, and recovery paths are considered. The remaining gaps are consent/licensing ADR and the unresolved privacy persistence contradiction.
+
+Testability
+Strong. Clear budgets, coverage thresholds, deterministic fixture approach for LLMs, property-based/adversarial tests, and E2E flows via MCP are all in place. Add “privacy proof” suites that run canaries through the full ingest path to assert zero PII ends up on disk.
+
+Overall recommendation
+Not ready for implementation until the critical issues are addressed. After:
+- Unifying the dataflow (pre-sanitize in hook, never persist raw),
+- Harmonizing schemas/status enums, and
+- Fixing hook IO/packaging and missing docs,
+
+the documentation will be implementation-ready and well above average in quality.
+
+Concrete must-fix checklist (condensed)
+- Decide and document: event persistence model (remove raw, keep only sanitized).
+- Update all code/docs to a single schema set; add or remove “event_queue” consistently; remove any “events” table.
+- Unify status enums and ID strategy (use ULID or UUID everywhere; recommend ULID).
+- Standardize hooks IO (stdin), config path (.claude/hooks.json), and compiled JS deployment.
+- Publish missing docs or remove dead links (sanitization pipeline, learning extraction, MCP server, event schema, hook configuration, database-setup guide).
+- Add consent/licensing ADR and enforce manual approval gate prior to upload by default.
