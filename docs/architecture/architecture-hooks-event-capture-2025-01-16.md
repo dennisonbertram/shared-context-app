@@ -82,6 +82,36 @@ The Hooks and Event Capture system captures every Claude Code interaction (user 
 
 ## Event Schema
 
+### Hook Input Schema
+
+Claude Code hooks receive JSON data via stdin with the following structure:
+
+**UserPromptSubmit Hook Input**:
+```typescript
+interface UserPromptSubmitHookData {
+  session_id: string;            // Unique session identifier
+  transcript_path: string;       // Path to JSONL transcript file
+  cwd: string;                   // Current working directory
+  permission_mode: string;       // Permission mode (e.g., "default")
+  hook_event_name: "UserPromptSubmit";
+  prompt: string;                // User's prompt text
+}
+```
+
+**Stop Hook Input**:
+```typescript
+interface StopHookData {
+  session_id: string;            // Unique session identifier
+  transcript_path: string;       // Path to JSONL transcript file
+  cwd: string;                   // Current working directory
+  permission_mode: string;       // Permission mode (e.g., "default")
+  hook_event_name: "Stop";
+  stop_hook_active: boolean;     // Indicates Stop hook is running
+}
+```
+
+**Note**: The Stop hook does NOT receive the agent response directly. You must read and parse the `transcript_path` file to extract the response.
+
 ### Event Structure
 
 ```typescript
@@ -102,7 +132,7 @@ interface CapturedEvent {
   // Metadata
   sequence: number;              // Order within conversation
   session_id: string;            // Claude Code session ID
-  project_id?: string;           // Project identifier
+  transcript_path: string;       // Path to transcript file
   created_at: number;            // Unix timestamp (ms)
   hook_name: string;             // 'UserPromptSubmit' | 'Stop'
 
@@ -132,6 +162,26 @@ interface Attachment {
 
 ## Hook Implementation
 
+### Stdin Reading Utility
+
+All hooks must read their input from stdin (not process.argv):
+
+```typescript
+/**
+ * Read JSON input from stdin
+ * All Claude Code hooks receive data via stdin
+ */
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+```
+
 ### UserPromptSubmit Hook
 
 **File**: `.claude/hooks/user-prompt-submit.ts`
@@ -139,6 +189,19 @@ interface Attachment {
 ```typescript
 #!/usr/bin/env node
 import { captureEvent } from './lib/event-collector';
+
+/**
+ * Read JSON input from stdin
+ */
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
 
 /**
  * UserPromptSubmit hook
@@ -149,19 +212,23 @@ async function main() {
   const startTime = performance.now();
 
   try {
-    // Read hook payload from stdin
-    const payload = await readStdin();
-    const hookData = JSON.parse(payload);
+    // Read hook input from stdin
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
+
+    // Validate event type
+    if (hookData.hook_event_name !== 'UserPromptSubmit') {
+      console.error('[Hook Error] Unexpected event:', hookData.hook_event_name);
+      process.exit(1);
+    }
 
     // Fire-and-forget event capture
     captureEvent({
       type: 'user_prompt',
       role: 'user',
       content: hookData.prompt,
-      tool_calls: hookData.toolCalls,
-      attachments: hookData.attachments,
-      session_id: hookData.sessionId,
-      project_id: hookData.projectId
+      session_id: hookData.session_id,
+      transcript_path: hookData.transcript_path
     }).catch(error => {
       // Log error but don't throw (never block user)
       console.error('[Hook Error]', error);
@@ -191,28 +258,68 @@ main();
 
 ```typescript
 #!/usr/bin/env node
+import fs from 'fs';
 import { captureEvent } from './lib/event-collector';
+
+/**
+ * Read JSON input from stdin
+ */
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+/**
+ * Parse JSONL transcript file to extract messages
+ */
+function parseTranscript(transcriptPath: string): any[] {
+  const content = fs.readFileSync(transcriptPath, 'utf8');
+  return content.split('\n')
+    .filter(line => line.trim())
+    .map(line => JSON.parse(line));
+}
 
 /**
  * Stop hook
  * Executes AFTER Claude completes its response
  * Performance budget: < 50ms
+ *
+ * Note: Stop hook receives transcript_path, not the response directly.
+ * Must read and parse transcript file to extract the agent's response.
  */
 async function main() {
   const startTime = performance.now();
 
   try {
-    const payload = await readStdin();
-    const hookData = JSON.parse(payload);
+    // Read hook input from stdin
+    const input = await readStdin();
+    const hookData = JSON.parse(input);
+
+    // Validate event type
+    if (hookData.hook_event_name !== 'Stop') {
+      console.error('[Hook Error] Unexpected event:', hookData.hook_event_name);
+      process.exit(1);
+    }
+
+    // Read transcript to get agent response
+    const transcript = parseTranscript(hookData.transcript_path);
+    const lastMessage = transcript[transcript.length - 1];
+
+    // Extract response content
+    const response = lastMessage.content;
 
     // Fire-and-forget event capture
     captureEvent({
       type: 'agent_response',
       role: 'assistant',
-      content: hookData.response,
-      tool_calls: hookData.toolCalls,
-      session_id: hookData.sessionId,
-      project_id: hookData.projectId
+      content: response,
+      session_id: hookData.session_id,
+      transcript_path: hookData.transcript_path
     }).catch(error => {
       console.error('[Hook Error]', error);
     });
@@ -226,6 +333,7 @@ async function main() {
     console.error('[Hook Critical Error]', error);
   }
 
+  // Exit successfully (never block)
   process.exit(0);
 }
 
@@ -234,30 +342,50 @@ main();
 
 ### Hook Configuration
 
-**File**: `.claude/hooks.json`
+**File**: `.claude/settings.json`
+
+Hooks are configured in `.claude/settings.json` (NOT `.claude/hooks.json`). Each hook event uses a matcher/hooks array structure:
 
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": {
-      "script": ".claude/hooks/user-prompt-submit.ts",
-      "enabled": true,
-      "timeout": 100
-    },
-    "Stop": {
-      "script": ".claude/hooks/stop.ts",
-      "enabled": true,
-      "timeout": 100
-    }
-  },
-  "config": {
-    "eventQueuePath": "${PROJECT_ROOT}/.data/events.db",
-    "maxBufferSize": 1000,
-    "fallbackToSampling": true,
-    "samplingRate": 0.1
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/user-prompt-submit.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop.js",
+            "timeout": 100
+          }
+        ]
+      }
+    ]
   }
 }
 ```
+
+**Key Configuration Details**:
+- File location: `.claude/settings.json` (not `.claude/hooks.json`)
+- Each hook event is an array of matcher objects
+- Each matcher contains a `hooks` array
+- Matcher can be omitted for non-tool events (UserPromptSubmit, Stop)
+- Each hook requires:
+  - `type`: "command" (or "prompt" for LLM-based hooks)
+  - `command`: Single string with command and arguments combined
+  - `timeout`: Milliseconds before hook is killed (default: 60000)
+- Use `$CLAUDE_PROJECT_DIR` environment variable for project-relative paths
+- Commands are executed with shell expansion, so quote paths with spaces
 
 ## Event Collector
 
@@ -681,14 +809,14 @@ class RecoveryManager {
 ### Hook Sandboxing
 
 ```typescript
-// Deny network egress in hooks
-process.env.NODE_ENV = 'hook';
-process.env.NO_PROXY = '*';
+// Use Claude Code environment variables
+const projectDir = process.env.CLAUDE_PROJECT_DIR;
+const isRemote = process.env.CLAUDE_CODE_REMOTE === 'true';
 
-// Restrict file system access
+// Restrict file system access to project directory
 const allowedPaths = [
-  path.join(PROJECT_ROOT, '.data'),
-  path.join(PROJECT_ROOT, '.claude')
+  path.join(projectDir, '.data'),
+  path.join(projectDir, '.claude')
 ];
 
 function validatePath(filePath: string): boolean {
@@ -696,6 +824,40 @@ function validatePath(filePath: string): boolean {
   return allowedPaths.some(allowed => resolved.startsWith(allowed));
 }
 ```
+
+### Environment Variables
+
+Claude Code provides several environment variables to hooks:
+
+**Available in All Hooks**:
+- `CLAUDE_PROJECT_DIR`: Absolute path to project root directory
+- `CLAUDE_CODE_REMOTE`: Set to "true" if running in web/remote environment, unset for local CLI
+
+**Available in SessionStart Hook Only**:
+- `CLAUDE_ENV_FILE`: File path for persisting environment variables across session
+
+**Example Usage**:
+```typescript
+// Access project directory
+const projectDir = process.env.CLAUDE_PROJECT_DIR;
+const dbPath = path.join(projectDir, '.data', 'events.db');
+
+// Detect environment
+const isRemote = process.env.CLAUDE_CODE_REMOTE === 'true';
+if (isRemote) {
+  console.log('Running in web environment');
+}
+
+// SessionStart hook: Persist env vars
+if (process.env.CLAUDE_ENV_FILE) {
+  fs.appendFileSync(
+    process.env.CLAUDE_ENV_FILE,
+    'export API_KEY=your-key\n'
+  );
+}
+```
+
+**Note**: Do NOT set arbitrary environment variables like `NODE_ENV` in hooks. Use the provided Claude Code environment variables instead.
 
 ### Log Sanitization
 
