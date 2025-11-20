@@ -105,7 +105,9 @@ Following the iterative build strategy:
 - ✅ **Level 7**: Job Queue (Async processing)
 - ✅ **Level 8**: AI Validation (Claude Agent SDK)
 - ✅ **Level 9**: Simple Learning Extraction
-- ⏳ **Level 10**: Basic MCP Server
+- ✅ **Level 10**: Basic MCP Server
+- ✅ **Level 11**: Learning Search / MCP Search
+- ⏳ **Level 12**: AI-Assisted Learning Extraction
 
 See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadmap.
 
