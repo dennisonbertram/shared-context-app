@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "UserPromptSubmit": ".claude/hooks/dist/userPromptSubmit.js"
+  }
+}
+
