@@ -21,6 +21,8 @@ describe('Database Schema', () => {
     expect(tableNames).toContain('conversations');
     expect(tableNames).toContain('messages');
     expect(tableNames).toContain('job_queue');
+    expect(tableNames).toContain('sanitization_log');
+    expect(tableNames).toContain('learnings');
   });
 
   it('should enforce foreign key constraints', () => {

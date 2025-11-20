@@ -59,5 +59,18 @@ export function createSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_sanitization_log_message
       ON sanitization_log(message_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS learnings (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_learnings_conversation
+      ON learnings(conversation_id, created_at);
   `);
 }
