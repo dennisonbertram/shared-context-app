@@ -10,25 +10,43 @@ import { ulid } from 'ulid';
 // Sanitization Logic (Duplicated from src/sanitization/fast-sanitize.ts)
 // ------------------------------------------------------------------
 
-// Email regex
-const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-
-// Phone regex (with lookbehind)
-const PHONE_REGEX = /(?<=^|\s|\b)(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
-
-// IP regex
+const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+const PHONE_REGEX =
+  /(?<=^|\s|\b)(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
 const IP_REGEX = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
-
-// Path regex
 const PATH_REGEX = /(\/Users\/|\/home\/)[a-zA-Z0-9_-]+\/[^\s]*/g;
+const OPENAI_API_KEY_REGEX = /sk-[a-zA-Z0-9]{48}/g;
+const ANTHROPIC_API_KEY_REGEX = /sk-ant-[a-zA-Z0-9-]{95}/g;
+const AWS_ACCESS_KEY_REGEX = /AKIA[0-9A-Z]{16}/g;
+const GITHUB_TOKEN_REGEX = /ghp_[a-zA-Z0-9]{36}/g;
+const JWT_REGEX =
+  /eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g;
+const SSH_PRIVATE_KEY_REGEX =
+  /-----BEGIN (?:RSA|OPENSSH) PRIVATE KEY-----[\s\S]+?-----END (?:RSA|OPENSSH) PRIVATE KEY-----/g;
+const CREDIT_CARD_REGEX = /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g;
+const SSN_REGEX = /\b\d{3}-\d{2}-\d{4}\b/g;
+
+const PII_PATTERNS = {
+  EMAIL: EMAIL_REGEX,
+  PHONE: PHONE_REGEX,
+  IP: IP_REGEX,
+  PATH: PATH_REGEX,
+  API_KEY_OPENAI: OPENAI_API_KEY_REGEX,
+  API_KEY_ANTHROPIC: ANTHROPIC_API_KEY_REGEX,
+  AWS_ACCESS_KEY: AWS_ACCESS_KEY_REGEX,
+  GITHUB_TOKEN: GITHUB_TOKEN_REGEX,
+  JWT: JWT_REGEX,
+  SSH_KEY: SSH_PRIVATE_KEY_REGEX,
+  CREDIT_CARD: CREDIT_CARD_REGEX,
+  SSN: SSN_REGEX
+} as const;
 
 function sanitize(text: string): string {
   if (!text) return text;
   let result = text;
-  result = result.replace(EMAIL_REGEX, '[REDACTED_EMAIL]');
-  result = result.replace(PHONE_REGEX, '[REDACTED_PHONE]');
-  result = result.replace(IP_REGEX, '[REDACTED_IP]');
-  result = result.replace(PATH_REGEX, '[REDACTED_PATH]');
+  for (const [type, regex] of Object.entries(PII_PATTERNS)) {
+    result = result.replace(regex, () => `[REDACTED_${type}]`);
+  }
   return result;
 }
 

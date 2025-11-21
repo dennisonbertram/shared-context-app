@@ -77,18 +77,22 @@ npm run format
 npm run format:check
 ```
 
-## Project Structure
+## Repository Layout
 
 ```
+docs/               # Architecture, plans, decisions, learnings
 src/
-  ├── db/              # Database schema and migrations
-  ├── hooks/           # Claude hooks for event capture
-  ├── sanitization/    # PII detection and sanitization
-  ├── learning/        # Learning extraction
-  ├── mcp/             # MCP server implementation
-  ├── queue/           # Async job processing
-  ├── test-utils/      # Testing utilities
-  └── types/           # TypeScript type definitions
+  ├── db/           # SQLite schema, migrations, helpers
+  ├── hooks/        # Claude hook logic + tests
+  ├── sanitization/ # Regex + AI validators
+  ├── learning/     # Extractors + persistence
+  ├── mcp/          # MCP server + tooling
+  ├── queue/        # Job queue primitives
+  ├── workers/      # Async processors
+  ├── test-utils/   # Shared testing helpers
+  └── types/        # Shared TypeScript types
+.claude/            # Hook build workspace (tsconfig, dist)
+dist/               # Compiled JS artifacts
 ```
 
 ## Implementation Levels
@@ -109,9 +113,16 @@ Following the iterative build strategy:
 - ✅ **Level 11**: Learning Search / MCP Search
 - ✅ **Level 12**: AI-Assisted Learning Extraction
 - ✅ **Level 13**: ULID Migration + Timestamps
-- ⏳ **Level 14**: Full Sanitization (All PII Types)
+- ✅ **Level 14**: Full Sanitization (All PII Types)
+- ⏳ **Level 15**: End-to-End QA & telemetry hardening
 
 See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadmap.
+
+## Sanitization Coverage
+
+- `src/sanitization/patterns.ts` enumerates regexes for 12 high-risk categories (email, phone, IP, paths, OpenAI + Anthropic API keys, AWS access keys, GitHub tokens, JWTs, SSH private keys, credit cards, SSNs).
+- `comprehensiveSanitize()` (and the `fastSanitize` alias) now redact all categories in <50ms while tracking how many redactions occur.
+- `.claude/hooks/src/userPromptSubmit.ts` duplicates the same patterns to keep the hook hermetic and <100ms without bundling the entire app.
 
 ## Documentation
 

@@ -1,71 +1,104 @@
-/**
- * Fast sanitization for PII
- * Uses regex-based pattern matching for <50ms performance requirement
- */
+import {
+  ANTHROPIC_API_KEY_REGEX,
+  AWS_ACCESS_KEY_REGEX,
+  CREDIT_CARD_REGEX,
+  EMAIL_REGEX,
+  GITHUB_TOKEN_REGEX,
+  IP_REGEX,
+  JWT_REGEX,
+  OPENAI_API_KEY_REGEX,
+  PATH_REGEX,
+  PHONE_REGEX,
+  PII_PATTERNS,
+  PiiPatternKey,
+  SSH_PRIVATE_KEY_REGEX,
+  SSN_REGEX
+} from './patterns';
 
-// Email: word characters, dots, plus, hyphens, percent, underscore @ domain . tld
-const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+export interface SanitizedMatch {
+  type: PiiPatternKey;
+  original: string;
+}
 
-// Phone:
-// - Optional country code (+1, +44)
-// - Optional parentheses around area code
-// - Separators: space, dot, hyphen
-// - Minimum 7 digits, max 15
-// Uses lookbehind (?<=^|\s|\b) to ensure we start at a boundary without consuming it
-const PHONE_REGEX = /(?<=^|\s|\b)(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+export interface SanitizationResult {
+  sanitized: string;
+  redactions: number;
+  matches: SanitizedMatch[];
+}
 
-// IPv4: 4 groups of 1-3 digits separated by dots
-// Uses boundaries to avoid matching version numbers like v1.2.3
-const IP_REGEX = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
-
-// File Paths: 
-// - Unix/macOS absolute paths starting with /Users/ or /home/
-// - Must contain at least one more path segment
-// - Stops at whitespace
-const PATH_REGEX = /(\/Users\/|\/home\/)[a-zA-Z0-9_-]+\/[^\s]*/g;
-
-/**
- * Sanitizes email addresses in text
- */
 export function sanitizeEmails(text: string): string {
   return text.replace(EMAIL_REGEX, '[REDACTED_EMAIL]');
 }
 
-/**
- * Sanitizes phone numbers in text
- */
 export function sanitizePhones(text: string): string {
   return text.replace(PHONE_REGEX, '[REDACTED_PHONE]');
 }
 
-/**
- * Sanitizes IP addresses in text
- */
 export function sanitizeIPs(text: string): string {
   return text.replace(IP_REGEX, '[REDACTED_IP]');
 }
 
-/**
- * Sanitizes file paths in text
- */
 export function sanitizePaths(text: string): string {
   return text.replace(PATH_REGEX, '[REDACTED_PATH]');
 }
 
-/**
- * Comprehensive fast sanitization
- * Applies all rule-based sanitizers in sequence
- * @param text - Text to sanitize
- * @returns Sanitized text
- */
-export function sanitize(text: string): string {
-  let result = text;
-  result = sanitizeEmails(result);
-  result = sanitizePhones(result);
-  result = sanitizeIPs(result);
-  result = sanitizePaths(result);
-  return result;
+export function sanitizeOpenAiKeys(text: string): string {
+  return text.replace(OPENAI_API_KEY_REGEX, '[REDACTED_API_KEY_OPENAI]');
 }
 
-// Export alias for backward compatibility
+export function sanitizeAnthropicKeys(text: string): string {
+  return text.replace(ANTHROPIC_API_KEY_REGEX, '[REDACTED_API_KEY_ANTHROPIC]');
+}
+
+export function sanitizeAwsKeys(text: string): string {
+  return text.replace(AWS_ACCESS_KEY_REGEX, '[REDACTED_AWS_ACCESS_KEY]');
+}
+
+export function sanitizeGithubTokens(text: string): string {
+  return text.replace(GITHUB_TOKEN_REGEX, '[REDACTED_GITHUB_TOKEN]');
+}
+
+export function sanitizeJwt(text: string): string {
+  return text.replace(JWT_REGEX, '[REDACTED_JWT]');
+}
+
+export function sanitizeSshKeys(text: string): string {
+  return text.replace(SSH_PRIVATE_KEY_REGEX, '[REDACTED_SSH_KEY]');
+}
+
+export function sanitizeCreditCards(text: string): string {
+  return text.replace(CREDIT_CARD_REGEX, '[REDACTED_CREDIT_CARD]');
+}
+
+export function sanitizeSsns(text: string): string {
+  return text.replace(SSN_REGEX, '[REDACTED_SSN]');
+}
+
+export function comprehensiveSanitize(text: string): SanitizationResult {
+  if (!text) {
+    return { sanitized: text, redactions: 0, matches: [] };
+  }
+
+  let sanitized = text;
+  let redactions = 0;
+  const matches: SanitizedMatch[] = [];
+
+  for (const [type, regex] of Object.entries(PII_PATTERNS) as Array<
+    [PiiPatternKey, RegExp]
+  >) {
+    sanitized = sanitized.replace(regex, (match: string) => {
+      redactions += 1;
+      matches.push({ type, original: match });
+      return `[REDACTED_${type}]`;
+    });
+  }
+
+  return { sanitized, redactions, matches };
+}
+
+export function sanitize(text: string): string {
+  return comprehensiveSanitize(text).sanitized;
+}
+
 export const fastSanitize = sanitize;
+
