@@ -100,4 +100,22 @@ describe('End-to-End Hook Integration', () => {
     expect(payload.conversationId).toBe('job-test-1');
     db.close();
   });
+
+  it('should enqueue learning job when assistant message is captured', async () => {
+    const event = {
+      type: 'UserPromptSubmit',
+      role: 'assistant',
+      content: 'Here is code ```js const x = 1 ```',
+      conversation_id: 'conv-learning',
+      timestamp: Date.now()
+    };
+
+    await execAsync(`echo '${JSON.stringify(event)}' | DB_PATH="${DB_PATH}" node "${HOOK_SCRIPT}"`);
+    const db = new Database(DB_PATH);
+    const job = db
+      .prepare('SELECT type FROM job_queue WHERE type = ? ORDER BY created_at DESC LIMIT 1')
+      .get('extract_learning_ai') as { type: string } | undefined;
+    expect(job).toBeDefined();
+    db.close();
+  });
 });

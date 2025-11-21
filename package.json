@@ -18,6 +18,7 @@
     "db:migrate": "ts-node src/db/migrate.ts",
     "db:reset": "rm -f data/context.db && npm run db:migrate",
     "worker:sanitize": "ts-node src/workers/runSanitizationWorker.ts",
+    "worker:learning": "ts-node src/workers/runLearningWorker.ts",
     "mcp:server": "ts-node src/mcp/runServer.ts"
   },
   "keywords": [

@@ -152,9 +152,9 @@ async function main(): Promise<void> {
     if (!input) return;
 
     const event = JSON.parse(input);
-    
-    // Sanitize content
-    const content = (event as { prompt?: string }).prompt || ''; 
+    const role =
+      (event as { role?: string }).role === 'assistant' ? 'assistant' : 'user';
+    const content = (event as { prompt?: string; content?: string }).prompt || (event as { content?: string }).content || '';
     const sanitizedContent = sanitize(content);
 
     // Persist to DB
@@ -176,7 +176,7 @@ async function main(): Promise<void> {
     db.prepare(`
       INSERT INTO messages (id, conversation_id, role, content, sequence, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(messageId, conversationId, 'user', sanitizedContent, sequence, now);
+    `).run(messageId, conversationId, role, sanitizedContent, sequence, now);
 
     enqueueJob(db, 'sanitize_async', {
       messageId,
@@ -184,6 +184,12 @@ async function main(): Promise<void> {
       sequence,
       created_at: now
     });
+
+    if (role === 'assistant') {
+      enqueueJob(db, 'extract_learning_ai', {
+        conversationId
+      });
+    }
 
     db.close();
 
