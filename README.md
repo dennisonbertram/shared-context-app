@@ -114,7 +114,7 @@ Following the iterative build strategy:
 - ✅ **Level 12**: AI-Assisted Learning Extraction
 - ✅ **Level 13**: ULID Migration + Timestamps
 - ✅ **Level 14**: Full Sanitization (All PII Types)
-- ⏳ **Level 15**: End-to-End QA & telemetry hardening
+- ✅ **Level 15**: End-to-End QA & telemetry hardening
 
 See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadmap.
 
@@ -123,6 +123,12 @@ See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadma
 - `src/sanitization/patterns.ts` enumerates regexes for 12 high-risk categories (email, phone, IP, paths, OpenAI + Anthropic API keys, AWS access keys, GitHub tokens, JWTs, SSH private keys, credit cards, SSNs).
 - `comprehensiveSanitize()` (and the `fastSanitize` alias) now redact all categories in <50ms while tracking how many redactions occur.
 - `.claude/hooks/src/userPromptSubmit.ts` duplicates the same patterns to keep the hook hermetic and <100ms without bundling the entire app.
+
+## End-to-End Coverage
+
+- `src/e2e/full-flow.test.ts` spawns the compiled Claude hook, writes events into a throwaway SQLite file, drains `sanitize_async` + `extract_learning_ai` jobs, and then executes `searchLearnings()` to simulate an MCP query.
+- Verifies every high-risk PII placeholder appears in stored content and asserts that three jobs (two sanitization, one learning) finish successfully.
+- Ensures the resulting learning is discoverable via keyword search (`code`) so downstream agents see sanitized, AI-validated insights.
 
 ## Documentation
 
