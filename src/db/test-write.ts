@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { ulid } from 'ulid';
 
 // Initialize table if it doesn't exist
 function ensureTable(db: Database.Database): void {
@@ -13,8 +14,7 @@ function ensureTable(db: Database.Database): void {
  */
 export function writeTestRecord(db: Database.Database, message: string): string {
   ensureTable(db);
-  // Use timestamp + random component to avoid collisions
-  const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const id = ulid();
   db.prepare('INSERT INTO test (id, message) VALUES (?, ?)').run(id, message);
   return id;
 }

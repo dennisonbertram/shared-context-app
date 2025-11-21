@@ -108,7 +108,8 @@ Following the iterative build strategy:
 - ✅ **Level 10**: Basic MCP Server
 - ✅ **Level 11**: Learning Search / MCP Search
 - ✅ **Level 12**: AI-Assisted Learning Extraction
-- ⏳ **Level 13**: ULID Migration + Timestamps
+- ✅ **Level 13**: ULID Migration + Timestamps
+- ⏳ **Level 14**: Full Sanitization (All PII Types)
 
 See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadmap.
 
