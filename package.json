@@ -30,7 +30,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.3",
+    "@anthropic-ai/sdk": "^0.20.5",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "better-sqlite3": "^9.2.2",
     "ulid": "^2.3.0"
