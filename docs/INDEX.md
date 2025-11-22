@@ -1,12 +1,12 @@
 # Documentation Index
 
-> Last updated: 2025-01-17
+> Last updated: 2025-11-22
 
 ## 🚨 Critical Update (2025-01-17)
 
 **IMPORTANT**: A comprehensive hooks alignment audit identified 6 critical architectural issues with the Claude Code hooks integration. All issues have been remediated. See [Hooks Alignment Remediation Report](./reviews/hooks-alignment-remediation-2025-01-17.md) for details.
 
-**Status**: Documentation updated with correct Claude Code hooks implementation. Review remediation report before proceeding with implementation.
+**Status**: ✅ Levels 0-15 complete with 83 passing tests. Documentation updated with correct Claude Code hooks implementation.
 
 ## Overview
 
@@ -22,6 +22,7 @@ This directory contains all project documentation for the Global Context Network
 - [Guides](./guides/INDEX.md) - How-to guides for development and testing
 - [Reference](./reference/INDEX.md) - Technical reference materials and APIs
 - [Learnings](./learnings/INDEX.md) - Insights, retrospectives, and discoveries
+- [Context](./context/INDEX.md) - Prompt/context bundles, reviewer packets, and exports
 
 ## Project Goals
 
@@ -59,13 +60,14 @@ This directory contains all project documentation for the Global Context Network
 ## Document Count by Category
 
 - **Architecture**: 9 documents (system design, components, data flow) ✅ **COMPLETE**
-- **Decisions**: 13 ADRs (major architectural decisions) ✅ **COMPLETE**
-- **Plans**: 13 plans (MVP plan, roadmap, phase tasks, iterative strategy) ✅ **COMPLETE**
-- **Guides**: 7 guides (foundation, database, SDK, subagents, testing, TDD, hooks) ✅ **COMPLETE**
-- **Reference**: 6 references (testing, subagents, database, SDK, events, hooks) ✅ **COMPLETE**
-- **Learnings**: 0 (will be populated during implementation)
+- **Decisions**: 14 ADRs (major architectural decisions) ✅ **COMPLETE**
+- **Plans**: 15 plans (MVP plan, roadmap, phase tasks, iterative strategy) ✅ **COMPLETE**
+- **Guides**: 8 guides (foundation, database, SDK, subagents, testing, TDD, hooks, workflows) ✅ **COMPLETE**
+- **Reference**: 7 references (testing, subagents, database, SDK, events, hooks, schemas) ✅ **COMPLETE**
+- **Learnings**: 17 learning logs (Level 0-15 journey + deep dives) ✅ **COMPLETE**
+- **Context**: 12 prompt/context bundles & reviewer packets (archived) 📦 **ARCHIVED**
 
-**Total**: 48 documents (all core documentation complete)
+**Total**: 82 curated documents (all core documentation complete)
 
 ## Key Architectural Decisions
 
@@ -114,7 +116,7 @@ This directory contains all project documentation for the Global Context Network
 
 When adding documentation:
 
-1. **Choose Category**: architecture, decisions, plans, guides, reference, or learnings
+1. **Choose Category**: architecture, decisions, plans, guides, reference, learnings, or context
 2. **Name Properly**: `category-topic-2025-01-16.md` format
 3. **Use Template**: Follow markdown-organizer templates
 4. **Add Frontmatter**: Include all required metadata

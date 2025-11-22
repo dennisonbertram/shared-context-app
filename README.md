@@ -139,6 +139,8 @@ All documentation is in the `docs/` directory:
 - **Plans**: Implementation plans and roadmaps
 - **Guides**: Step-by-step guides for development
 - **Reference**: API references and schemas
+- **Learnings**: Level-by-level retrospectives and insights
+- **Context**: Prompt/context bundles, reviewer packets, and exports
 
 ## Standards
 
