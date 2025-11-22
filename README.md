@@ -1,156 +1,85 @@
-# Shared Context App - Global Context Network MVP
+# Global Context Network MVP
 
-> Privacy-first learning capture and sharing system
+Privacy-first system for capturing, sanitizing, and sharing learnings from Claude Code conversations.
 
 ## Status
 
-**Current Level**: Level 0 Complete ✅
+✅ **Levels 0-15 Complete** (83 passing tests)
 
-**Implementation Strategy**: Iterative build with 15 levels (see `docs/plans/plan-iterative-build-strategy-2025-01-16.md`)
+## Overview
 
-## Project Overview
-
-This project implements a Global Context Network MVP that:
-- Captures conversations via Claude hooks
-- Sanitizes PII before storage (privacy-first)
-- Extracts learnings from conversations
-- Provides MCP server for querying learnings
-- Enables global sharing via IPFS + blockchain (MVP+)
+Captures Claude Code conversations through hooks, sanitizes all PII using regex + AI validation, extracts learnings, and exposes them via MCP for agent queries. Future phases will add IPFS + blockchain for global sharing.
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- npm 8+
-
-### Setup
-
 ```bash
-# Install dependencies
 npm install
-
-# Run tests
-npm test
-
-# Build
-npm run build
-
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
+npm run test:once  # Run all 83 tests
+npm run build      # Compile TypeScript
+npm run lint       # Check code quality
 ```
 
-## Development
-
-### Testing
+### Running Components
 
 ```bash
-# Run tests once
-npm run test:once
+# Workers (process async jobs)
+npm run worker:sanitize
+npm run worker:learning
 
-# Run tests in watch mode
-npm test
-
-# Run tests with UI
-npm run test:ui
-
-# Generate coverage report
-npm run coverage
+# MCP Server (query learnings)
+npm run mcp:server
 ```
 
-### Code Quality
-
-```bash
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
-
-# Format code
-npm run format
-
-# Check formatting
-npm run format:check
-```
-
-## Repository Layout
+## Architecture
 
 ```
-docs/               # Architecture, plans, decisions, learnings
 src/
-  ├── db/           # SQLite schema, migrations, helpers
-  ├── hooks/        # Claude hook logic + tests
-  ├── sanitization/ # Regex + AI validators
-  ├── learning/     # Extractors + persistence
-  ├── mcp/          # MCP server + tooling
-  ├── queue/        # Job queue primitives
-  ├── workers/      # Async processors
-  ├── test-utils/   # Shared testing helpers
-  └── types/        # Shared TypeScript types
-.claude/            # Hook build workspace (tsconfig, dist)
-dist/               # Compiled JS artifacts
+  ├── hooks/        # Claude Code event capture
+  ├── sanitization/ # 12 PII patterns (regex + AI validation)
+  ├── queue/        # SQLite-based job queue
+  ├── workers/      # Async sanitization + learning extraction
+  ├── learning/     # Heuristic + AI-powered extractors
+  ├── mcp/          # Model Context Protocol server
+  ├── db/           # SQLite schema + migrations
+  └── e2e/          # Full pipeline integration tests
+.claude/hooks/      # Compiled hook artifacts (<100ms budget)
+docs/               # Architecture, decisions, plans, learnings
 ```
 
-## Implementation Levels
+## Key Features
 
-Following the iterative build strategy:
+### Privacy-First Sanitization
+- **12 PII patterns**: emails, phones, IPs, paths, API keys (OpenAI, Anthropic, AWS, GitHub), JWTs, SSH keys, credit cards, SSNs
+- **<50ms regex-based** fast sanitization in hooks before any disk write
+- **AI validation** via async workers for missed patterns
+- Full test coverage in `src/e2e/full-flow.test.ts`
 
-- ✅ **Level 0**: Foundation (TypeScript, Vitest, Hello World)
-- ✅ **Level 1**: SQLite Connection
-- ✅ **Level 2**: Hook Skeleton
-- ✅ **Level 3**: Fast Sanitization (One PII Type)
-- ✅ **Level 4**: End-to-End (Hook + Sanitize + Write)
-- ✅ **Level 5**: Add remaining PII types (Phone, IP, etc)
-- ✅ **Level 6**: Correlation IDs (Conversation grouping)
-- ✅ **Level 7**: Job Queue (Async processing)
-- ✅ **Level 8**: AI Validation (Claude Agent SDK)
-- ✅ **Level 9**: Simple Learning Extraction
-- ✅ **Level 10**: Basic MCP Server
-- ✅ **Level 11**: Learning Search / MCP Search
-- ✅ **Level 12**: AI-Assisted Learning Extraction
-- ✅ **Level 13**: ULID Migration + Timestamps
-- ✅ **Level 14**: Full Sanitization (All PII Types)
-- ✅ **Level 15**: End-to-End QA & telemetry hardening
+### Learning Extraction
+- Heuristic extraction (code blocks) + AI-powered analysis
+- Async job queue for non-blocking processing
+- Conversation correlation via ULIDs + sequences
 
-See `docs/plans/plan-iterative-build-strategy-2025-01-16.md` for complete roadmap.
+### MCP Integration
+- `get_learning` and `search_learnings` tools
+- JSON-based query interface for agent access
 
-## Sanitization Coverage
+## Development Standards
 
-- `src/sanitization/patterns.ts` enumerates regexes for 12 high-risk categories (email, phone, IP, paths, OpenAI + Anthropic API keys, AWS access keys, GitHub tokens, JWTs, SSH private keys, credit cards, SSNs).
-- `comprehensiveSanitize()` (and the `fastSanitize` alias) now redact all categories in <50ms while tracking how many redactions occur.
-- `.claude/hooks/src/userPromptSubmit.ts` duplicates the same patterns to keep the hook hermetic and <100ms without bundling the entire app.
-
-## End-to-End Coverage
-
-- `src/e2e/full-flow.test.ts` spawns the compiled Claude hook, writes events into a throwaway SQLite file, drains `sanitize_async` + `extract_learning_ai` jobs, and then executes `searchLearnings()` to simulate an MCP query.
-- Verifies every high-risk PII placeholder appears in stored content and asserts that three jobs (two sanitization, one learning) finish successfully.
-- Ensures the resulting learning is discoverable via keyword search (`code`) so downstream agents see sanitized, AI-validated insights.
+- **Privacy**: Never persist raw PII—sanitize before storage
+- **IDs**: ULID (sortable, collision-resistant)
+- **Timestamps**: ISO-8601 with UTC
+- **TypeScript**: Strict mode, full type safety
+- **Testing**: TDD with 83 passing tests (19 test files)
 
 ## Documentation
 
-All documentation is in the `docs/` directory:
+- `docs/architecture/` - System design
+- `docs/decisions/` - ADRs (14 files)
+- `docs/plans/` - Implementation roadmap (15-level strategy)
+- `docs/learnings/` - Level-by-level retrospectives (17 files)
+- `docs/STANDARDS.md` - Canonical coding standards
 
-- **Architecture**: System design and architecture decisions
-- **Decisions**: ADRs (Architecture Decision Records)
-- **Plans**: Implementation plans and roadmaps
-- **Guides**: Step-by-step guides for development
-- **Reference**: API references and schemas
-- **Learnings**: Level-by-level retrospectives and insights
-- **Context**: Prompt/context bundles, reviewer packets, and exports
-
-## Standards
-
-All code follows the standards defined in `docs/STANDARDS.md`:
-
-- **Privacy First**: Never persist raw data, pre-sanitize before storage
-- **ULID IDs**: All identifiers use ULID (not UUID)
-- **ISO-8601 Timestamps**: All timestamps in UTC with Z suffix
-- **Strict TypeScript**: Full type safety with strict mode
-- **TDD Workflow**: Test-driven development with Red-Green-Refactor
+See `docs/INDEX.md` for complete navigation.
 
 ## License
 
