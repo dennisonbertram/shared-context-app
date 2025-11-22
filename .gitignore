@@ -1,1 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+
+# Database
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Testing
+coverage/
+.vitest/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Repomix
 *repomix*.txt
