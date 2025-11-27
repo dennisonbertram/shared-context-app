@@ -47,7 +47,7 @@ export async function runLearningExtractionWorker(options?: LearningWorkerOption
   const db = new Database(dbPath);
   createSchema(db);
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const processed = await processNextLearningJob(db);
     if (!processed) {

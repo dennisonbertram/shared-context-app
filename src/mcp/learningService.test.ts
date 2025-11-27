@@ -40,5 +40,48 @@ describe('learningService', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].title).toContain('Array');
   });
+
+  it('should find learnings by title keyword', () => {
+    db.prepare(
+      'INSERT INTO learnings (id, conversation_id, category, title, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run('learn-2', 'conv-1', 'technical', 'TypeScript Tips', 'Use strict mode', new Date().toISOString());
+    db.prepare(
+      'INSERT INTO learnings (id, conversation_id, category, title, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run('learn-3', 'conv-1', 'workflow', 'React Hooks', 'useState is powerful', new Date().toISOString());
+
+    const results = searchLearnings(db, { query: 'Type' });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('learn-2');
+  });
+
+  it('should respect limit parameter', () => {
+    db.prepare(
+      'INSERT INTO learnings (id, conversation_id, category, title, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run('learn-limit-test', 'conv-1', 'technical', 'Second learning', 'Content 2', new Date().toISOString());
+
+    const results = searchLearnings(db, { query: ' ', limit: 1 });
+    expect(results).toHaveLength(1);
+  });
+
+  it('should return empty array when nothing matches', () => {
+    const results = searchLearnings(db, { query: 'GraphQL' });
+    expect(results).toHaveLength(0);
+  });
+
+  it('should clamp limit to maximum of 50', () => {
+    for (let i = 10; i < 70; i++) {
+      db.prepare(
+        'INSERT INTO learnings (id, conversation_id, category, title, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(`learn-limit-${i}`, 'conv-1', 'technical', `Learning ${i}`, `Content ${i}`, new Date().toISOString());
+    }
+
+    const results = searchLearnings(db, { query: 'Learning', limit: 100 });
+    expect(results).toHaveLength(50);
+  });
+
+  it('should clamp limit to minimum of 1', () => {
+    const results = searchLearnings(db, { query: 'Test', limit: 0 });
+    expect(results).toHaveLength(1);
+  });
 });
 

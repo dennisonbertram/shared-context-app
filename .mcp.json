@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gcn-learnings": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./dist/mcp/server.js"],
+      "env": {
+        "DB_PATH": "./data/context.db"
+      }
+    }
+  }
+}

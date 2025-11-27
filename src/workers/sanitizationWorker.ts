@@ -48,7 +48,7 @@ export async function runSanitizationWorker(options?: { dbPath?: string; pollInt
   const db = new Database(dbPath);
   createSchema(db);
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const processed = await processNextSanitizationJob(db);
     if (!processed) {

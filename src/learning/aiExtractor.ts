@@ -72,7 +72,7 @@ Respond with JSON:
         created_at: new Date().toISOString()
       };
     }
-  } catch (error) {
+  } catch {
     // fall back to heuristic
   }
 

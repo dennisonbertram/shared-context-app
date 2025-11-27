@@ -61,7 +61,7 @@ Respond with valid JSON:
         rawResponse: response
       };
     }
-  } catch (error) {
+  } catch {
     return heuristicValidation(trimmed);
   }
 

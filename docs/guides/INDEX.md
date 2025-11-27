@@ -39,6 +39,7 @@ This directory contains step-by-step how-to guides for developing the Global Con
 | 2025-01-16 | [guide-testing-harness-usage-2025-01-16.md](./guide-testing-harness-usage-2025-01-16.md) | 120 min | ✅ Ready | Use Claude-powered testing for AI-driven validation |
 | 2025-01-16 | [guide-tdd-workflow-2025-01-16.md](./guide-tdd-workflow-2025-01-16.md) | 90 min | ✅ Ready | Master Red-Green-Refactor with subagents |
 | 2025-01-16 | [guide-phase-1-hook-development-2025-01-16.md](./guide-phase-1-hook-development-2025-01-16.md) | 150 min | ✅ Ready | Implement Claude Code hooks for event capture |
+| 2025-01-27 | [guide-mcp-server-setup.md](./guide-mcp-server-setup.md) | 20-30 min | ✅ Ready | Configure MCP server for querying learnings in Claude Code |
 
 ## Guide Structure
 
@@ -79,7 +80,9 @@ Each guide follows a consistent format:
 
 ### Foundation & Setup
 - **Phase 0 Foundation Setup**: TypeScript project, Vitest, SQLite, linting
+- **Database Setup**: SQLite configuration, schema creation, migrations
 - **Claude Agent SDK Integration**: SDK installation, configuration, basic usage
+- **MCP Server Setup**: Configure MCP server for querying learnings
 
 ### Development Patterns
 - **Using Subagents**: Delegation patterns, parallel/sequential execution

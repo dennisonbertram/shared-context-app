@@ -3,8 +3,7 @@ import Database from 'better-sqlite3';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createSchema } from '../db/schema';
-import { getLearningById } from './learningService';
-import { searchLearnings } from './searchService';
+import { getLearningById, searchLearnings } from './learningService';
 
 export interface McpServerOptions {
   dbPath?: string;
@@ -107,7 +106,7 @@ export async function startMcpServer(options?: McpServerOptions): Promise<void> 
       }
 
       const { query, limit } = args;
-      const results = searchLearnings(db, query, limit);
+      const results = searchLearnings(db, { query, limit });
       return {
         content: [
           {
