@@ -30,6 +30,39 @@ npm run worker:learning
 npm run mcp:server
 ```
 
+### MCP Configuration
+
+To enable learning queries in Claude Code, configure the MCP server:
+
+**1. Build the project:**
+```bash
+npm run build
+```
+
+**2. Create `.mcp.json` in project root:**
+```json
+{
+  "mcpServers": {
+    "gcn-learnings": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./dist/mcp/server.js"],
+      "env": {
+        "DB_PATH": "./data/context.db"
+      }
+    }
+  }
+}
+```
+
+**3. Query learnings in Claude Code:**
+```
+Search learnings for "typescript"
+Get learning 01HQ2X3Y4Z5A6B7C8D9E0F1G2H
+```
+
+See `docs/guides/guide-mcp-server-setup.md` for complete setup instructions.
+
 ## Architecture
 
 ```

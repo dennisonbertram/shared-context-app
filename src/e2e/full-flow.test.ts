@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { createSchema } from '../db/schema';
 import { processNextSanitizationJob } from '../workers/sanitizationWorker';
 import { processNextLearningJob } from '../workers/learningExtractionWorker';
-import { searchLearnings } from '../mcp/searchService';
+import { searchLearnings } from '../mcp/learningService';
 
 const DB_PATH = join(process.cwd(), 'test-e2e-full.db');
 const HOOK_SCRIPT = join(process.cwd(), '.claude/hooks/dist/userPromptSubmit.js');
@@ -147,7 +147,7 @@ b3BlbnNzaC1rZXktdjEAAAAB
     expect(jobs.filter((job) => job.type === 'sanitize_async')).toHaveLength(2);
     expect(jobs.filter((job) => job.type === 'extract_learning_ai')).toHaveLength(1);
 
-    const learnings = searchLearnings(db, 'code', 5);
+    const learnings = searchLearnings(db, { query: 'code', limit: 5 });
     expect(learnings.length).toBeGreaterThan(0);
     expect(learnings.some((learning) => learning.conversation_id === conversationId)).toBe(true);
 
